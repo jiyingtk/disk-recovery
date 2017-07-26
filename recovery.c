@@ -823,9 +823,8 @@ static int reap_wait_aios(struct thr_info *tip)
 
     if (!is_reap_done(tip)) {
         pthread_mutex_lock(&tip->mutex);
-        while (tip->naios_out == 0 && !tip->iter_send_done && !tip->send_done) {
+        while (tip->naios_out == 0 && !tip->iter_send_done && !tip->send_done && tip->wq->queue_size == 0) {
             tip->reap_wait = 1;
-
             // fprintf(stderr, "in reap_wait_aios: before waiting, send_done %d\n", tip->send_done);
 
             if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
@@ -833,6 +832,11 @@ static int reap_wait_aios(struct thr_info *tip)
                     "nfree_current cond wait failed\n");
                 /*NOTREACHED*/
             }
+        }
+        if (tip->wq->queue_size > 0) {
+            pthread_mutex_unlock(&tip->mutex);
+            write_process(tip);
+            pthread_mutex_lock(&tip->mutex);
         }
         naios = tip->naios_out;
         pthread_mutex_unlock(&tip->mutex);
@@ -939,6 +943,7 @@ again:
         list_move_tail(&iocbp->head, &tip->free_iocbs);
         tip->naios_free++;
         tip->naios_out--;
+tip->rcount++;
         pthread_mutex_unlock(&tip->mutex);
     }
 
@@ -1066,6 +1071,8 @@ int iocbs_map(struct thr_info *tip, struct iocb **list,
 
         iocbp->op = rw ? 'R' : 'W';
         iocbp->stripe_id = pkt->stripe_id;
+if (iocbp->stripe_id != -1 && rw == 0)
+	tip->scount++;
 
         list_move_tail(&iocbp->head, &tip->used_iocbs);
         list[i] = &iocbp->iocb;
@@ -1151,7 +1158,7 @@ static void handle_args(struct thr_info *tip, int argc, char *argv[])
     device_fn = argv[6];
     ainfo->trace_fn = argv[7];
 
-
+tip->scount = tip->rcount = 0;
     tip->ainfo = ainfo;
 }
 

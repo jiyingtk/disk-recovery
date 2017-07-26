@@ -581,7 +581,7 @@ void raid5_online_recover(struct thr_info *tip){
 			}
 
 	        if (processed_stripes != 0 && processed_stripes % ainfo->max_stripes == 0) {   //du64_to_sec(gettime() - last_time) >= 10
-	            // printf("time wait\n");
+	            printf("wait reclaim\n");
 	            pthread_mutex_lock(&tip->mutex);
 	            tip->send_wait = 1;
 	            tip->wait_all_finish = 1;
@@ -622,8 +622,7 @@ void raid5_online_recover(struct thr_info *tip){
                     "%d: io_submit(%d:%ld) failed (%s)\n", 
                     tip->cpu, ntodo, ndone, 
                     strerror(labs(ndone)));
-                /*NOTREACHED*/
-            }
+                            }
 
             pthread_mutex_lock(&tip->mutex);
             tip->naios_out += ndone;

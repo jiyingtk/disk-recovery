@@ -58,6 +58,7 @@ struct thr_info {
     struct wait_queue *wq;
     struct buf_space *bs;
     addr_type progress, safe;
+    int scount, rcount;
 };
 
 struct request_info {
