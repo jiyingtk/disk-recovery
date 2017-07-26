@@ -1133,7 +1133,7 @@ static void *replay_sub(void *arg)
  */
 static void handle_args(struct thr_info *tip, int argc, char *argv[])
 {
-    if (argc != 7) {
+    if (argc != 8) {
         fprintf(stderr, "%s: method v k chunk_size capacity devices_file\n", argv[0]);
         exit(1);
     }
@@ -1149,7 +1149,7 @@ static void handle_args(struct thr_info *tip, int argc, char *argv[])
     ainfo->capacity *= 1024 * 1024;
     ainfo->max_stripes = CACHED_STRIPE_NUM;
     device_fn = argv[6];
-    // ainfo->trace_f = fopen(argv[6], "r");
+    ainfo->trace_fn = argv[7];
 
 
     tip->ainfo = ainfo;

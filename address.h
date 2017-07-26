@@ -18,7 +18,7 @@ struct addr_info {
 	int b, v, r, k, lambda;
 	int g;
 
-	FILE *trace_f;
+	char *trace_fn;
 	int max_stripes;
 };
 
@@ -425,9 +425,14 @@ void raid5_std(int dataDiskNum, int logicAddr, int reqSize, char op ){
 }
 
 //访问21个磁盘的RAID5盘阵，每3个磁盘为一个2+1的RAID5
-void raid5_3time7disks_request(struct addr_info *ainfo, int logicAddr, int reqSize, char op )
+void raid5_3time7disks_request(struct thr_info *tip, int logicAddr, int reqSize, char op)
 {
-	int dataDiskNum = 2;
+    struct iocb *list[MAX_DEVICE_NUM];
+    struct request_info reqs[MAX_DEVICE_NUM];
+
+	struct addr_info *ainfo = tip->ainfo;
+
+	int dataDiskNum = ainfo->k - 1;
 	int dataPerStripe = (dataDiskNum + 1) * dataDiskNum;
 	int maxOffset, reqBlockNum;
 	int stripeId, groupId, inStripeAddr, inBlockId, diskId, blockId, sectorId; 
@@ -443,11 +448,15 @@ void raid5_3time7disks_request(struct addr_info *ainfo, int logicAddr, int reqSi
 		reqBlockNum = reqSize / BLOCK + 1;
 	}
 
-	int i;
+	int groups = ainfo->disk_nums / ainfo->k;
+
+	int i, req_count;
 	for(i = 0; i < reqBlockNum; i++){
 		if (logicAddr < maxOffset){
-			stripeId = logicAddr / (dataPerStripe * 7);
-			groupId = (logicAddr % (dataPerStripe *7)) / dataPerStripe;
+			req_count = 0;
+
+			stripeId = logicAddr / (dataPerStripe * groups);
+			groupId = (logicAddr % (dataPerStripe * groups)) / dataPerStripe;
 			inStripeAddr = logicAddr % dataPerStripe;
 			inBlockId = inStripeAddr / (dataDiskNum + 1);
 
@@ -455,41 +464,66 @@ void raid5_3time7disks_request(struct addr_info *ainfo, int logicAddr, int reqSi
 			if (diskId >= dataDiskNum - inBlockId){  //****这里就完成了轮转
 				inBlockId += 1;
 			}
-			diskId += groupId * 3;
+			diskId += groupId * ainfo->k;
 			blockId = stripeId * (dataDiskNum + 1) + inBlockId;
-			// sectorId = blockId * BLOCK2SECTOR;
 
-			// dataReq.start = t;
-			// dataReq.devno = diskId;
-			// dataReq.blkno = sectorId;
-			// dataReq.bytecount = BLOCK;
+	        int ntodo = 0, ndone;
+	        reqs[req_count].type = 1;
+	        reqs[req_count].disk_num = diskId;
+	        reqs[req_count].offset = blockId * BLOCK;
+	        reqs[req_count].size = BLOCK;
+	        reqs[req_count].stripe_id = -1;
+	        req_count++;
+	        ntodo++;
 
-			// //fprintf(stderr, "data disk:%d\n", diskId);
+			if (op == 'w' || op == 'W'){
+		        reqs[req_count].type = 0;
+		        reqs[req_count].disk_num = diskId;
+		        reqs[req_count].offset = blockId * BLOCK;
+		        reqs[req_count].size = BLOCK;
+		        reqs[req_count].stripe_id = -1;
+		        req_count++;
+		        ntodo++;
 
-			// if (op == 'r' || op == 'R'){
-			// 	dataReq.flags = DISKSIM_READ;
-			// 	disksim_interface_request_arrive(disksim, t, &dataReq);
-			// }
+		        reqs[req_count].type = 1;
+		        reqs[req_count].disk_num = dataDiskNum - inBlockId + groupId * ainfo->k;
+		        reqs[req_count].offset = blockId * BLOCK;
+		        reqs[req_count].size = BLOCK;
+		        reqs[req_count].stripe_id = -1;
+		        req_count++;
+		        ntodo++;
 
-			// if (op == 'w' || op == 'W'){
-			// 	dataReq.flags = DISKSIM_READ;
-			// 	disksim_interface_request_arrive(disksim, t, &dataReq);
-			// 	dataReq.flags = DISKSIM_WRITE;
-			// 	disksim_interface_request_arrive(disksim, t, &dataReq);
+		        reqs[req_count].type = 0;
+		        reqs[req_count].disk_num = dataDiskNum - inBlockId + groupId * ainfo->k;
+		        reqs[req_count].offset = blockId * BLOCK;
+		        reqs[req_count].size = BLOCK;
+		        reqs[req_count].stripe_id = -1;
+		        req_count++;
+		        ntodo++;
+			}
 
-			// 	//更新parity
-			// 	parityReq.start = t;
-			// 	parityReq.blkno = sectorId;
-			// 	parityReq.devno = dataDiskNum - inBlockId + groupId * 3;
-			// 	parityReq.bytecount = BLOCK;
+	        iocbs_map(tip, list, reqs, ntodo, 0);
 
-			// 	//fprintf(stderr, "parity %d\n", parityReq.devno);
+            ndone = io_submit(tip->ctx, ntodo, list);
 
-			// 	parityReq.flags = DISKSIM_READ;
-			// 	disksim_interface_request_arrive(disksim, t, &parityReq);
-			// 	parityReq.flags = DISKSIM_WRITE;
-			// 	disksim_interface_request_arrive(disksim, t, &parityReq);
-			// }
+            if (ndone != ntodo) {
+                fatal("io_submit", ERR_SYSCALL,
+                    "%d: io_submit(%d:%ld) failed (%s)\n", 
+                    tip->cpu, ntodo, ndone, 
+                    strerror(labs(ndone)));
+                /*NOTREACHED*/
+            }
+
+            pthread_mutex_lock(&tip->mutex);
+            tip->naios_out += ndone;
+            assert(tip->naios_out <= naios);
+            if (tip->reap_wait) {
+                tip->reap_wait = 0;
+                pthread_cond_signal(&tip->cond);
+            }
+            pthread_mutex_unlock(&tip->mutex);
+
+
 			logicAddr++;
 		}
 	}
@@ -500,6 +534,7 @@ void raid5_3time7disks_request(struct addr_info *ainfo, int logicAddr, int reqSi
 void raid5_online_recover(struct thr_info *tip){
     struct iocb *list[MAX_DEVICE_NUM];
     long long last_time = gettime();
+    long long start_time = gettime();
 
     struct request_info reqs[MAX_DEVICE_NUM];
 
@@ -512,9 +547,11 @@ void raid5_online_recover(struct thr_info *tip){
 	int groupId, inGroupId; //坏盘所在组，以及在组内的磁盘编号
 	int *disks = (typeof(disks)) malloc(sizeof(typeof(*disks)) * (ainfo->g - 1));   //对应的2个存活磁盘
 
+	FILE *f = fopen(ainfo->trace_fn, "r");
+
 	int hostName, logicAddr, size;
 	char op;
-	float timeStamp;
+	double timeStamp;
 
 	groupId = ainfo->failedDisk / ainfo->k;
 	inGroupId = ainfo->failedDisk % ainfo->k;
@@ -598,24 +635,34 @@ void raid5_online_recover(struct thr_info *tip){
             pthread_mutex_unlock(&tip->mutex);
 
 
-			for (m = 0; m < requestPerSecond; m++){
-				fscanf(ainfo->trace_f, "%d,%d,%d,%c,%f", &hostName, &logicAddr, &size, &op, &timeStamp);
-				while (hostName == 1 || hostName == 3 || hostName == 5){
-					fscanf(ainfo->trace_f, "%d,%d,%d,%c,%f", &hostName, &logicAddr, &size, &op, &timeStamp);;
+			// if ((reqest_count + 1) % 20 == 0)
+			// 	fprintf(stderr, "has process %d request\n", reqest_count);
+
+            int reqest_count = 0;
+            while (reqest_count < 20) {
+				int retCode;
+				retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
+				//while (retCode == 5){
+				//	retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);;
+				//}
+				if (retCode != 5) {
+					fclose(f);
+					f = fopen(ainfo->trace_fn, "r");
+					retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
 				}
-				if (logicAddr >= ainfo->capacity_total){
-					continue;
+
+				logicAddr = (logicAddr / 8) % ainfo->capacity_total;
+				raid5_3time7disks_request(tip, logicAddr, size, op);
+				reqest_count++;
+				
+				long long cur_time = gettime();
+				long long time_diff = (long long) (timeStamp * 1000 * 1000 * 1000) - (cur_time - start_time);
+				if (time_diff < 0) {
+					break;
 				}
-				raid5_3time7disks_request(ainfo, logicAddr, size, op);
-			}
+            }
 
 			processed_stripes++;
-			// writeReq.start = now;
-			// writeReq.devno = failedDisk;
-			// writeReq.blkno = (i * ainfo->blocks_partition + j * ainfo->blocks_per_strip) * BLOCK2SECTOR;
-			// writeReq.bytecount = ainfo->strip_size;
-			// writeReq.flags = DISKSIM_WRITE;
-			// disksim_interface_request_arrive(disksim, now, &writeReq);
 		}
 	}
 
@@ -767,11 +814,11 @@ void oi_raid_online_recover(struct thr_info *tip){
             pthread_cond_signal(&tip->cond);
         }
         pthread_mutex_unlock(&tip->mutex);
-
+FILE *f = fopen(ainfo->trace_fn, "r");
 		for (m = 0; m < requestPerSecond; m++){
-			fscanf(ainfo->trace_f, "%d,%d,%d,%c,%f", &hostName, &logicAddr, &size, &op, &timeStamp);
+			fscanf(f, "%d,%d,%d,%c,%f", &hostName, &logicAddr, &size, &op, &timeStamp);
 			while (hostName == 1 || hostName == 3 || hostName == 5){
-				fscanf(ainfo->trace_f, "%d,%d,%d,%c,%f", &hostName, &logicAddr, &size, &op, &timeStamp);
+				fscanf(f, "%d,%d,%d,%c,%f", &hostName, &logicAddr, &size, &op, &timeStamp);
 			}
 			if (logicAddr < ainfo->capacity_total){
 				oi_raid_request(ainfo, logicAddr, size, op);	
