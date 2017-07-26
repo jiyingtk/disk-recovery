@@ -12,7 +12,7 @@ OCFLAGS	= -UCOUNT_IOS -UDEBUG -DNDEBUG
 XCFLAGS	= -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 override CFLAGS += $(INCS) $(XCFLAGS) $(OCFLAGS)
 
-PROGS	= async-access
+PROGS	= recovery
 LIBS	= -laio -lrt -lpthread
 
 all: depend $(PROGS)
@@ -26,7 +26,7 @@ clean:
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $*.o $<
 
-async-access: async-access.o
+recovery: recovery.o
 	$(CC) $(CFLAGS) -o $@ $(filter %.o,$^) $(LIBS)
 
 depend:

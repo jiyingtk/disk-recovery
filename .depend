@@ -1,1 +1,1 @@
-async-access.o: async-access.c list.h async-access.h recover_online.h
+recovery.o: recovery.c list.h recovery.h address.h
