@@ -1,0 +1,6 @@
+raid5 disk 21 v 7 k 3 g 3 block_size 4MB disk_size 1G
+5.071947414
+oi-raid disk 21 v 7 k 3 g 3 block_size 4MB disk_size 1G
+1.706469524
+55.952424234
+14.736146492
