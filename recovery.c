@@ -38,7 +38,7 @@
 #include "address.h"
 
 
-/* 
+/*
  * ========================================================================
  * ==== STRUCTURE DEFINITIONS =============================================
  * ========================================================================
@@ -80,7 +80,7 @@ void dequeue(struct wait_queue *wq, int *disk_num, addr_type *offset) {
 
 
 
-/* 
+/*
  * ========================================================================
  * ==== GLOBAL VARIABLES ==================================================
  * ========================================================================
@@ -108,9 +108,9 @@ static int find_records = 0;        // Boolean: Find record files auto
 
 //default values
 static unsigned record_index = 0;
-static FILE * output_file = NULL;   //will open out.txt
-static FILE * cmd_file = NULL;      //will open cmd.txt
-static char * trace_name = NULL;
+static FILE *output_file = NULL;    //will open out.txt
+static FILE *cmd_file = NULL;       //will open cmd.txt
+static char *trace_name = NULL;
 static char *flag = NULL;
 static int type = 0;    //native
 static int used_for = 0;    //native mode
@@ -165,7 +165,7 @@ static volatile int n_replays_start = 0;
 static pthread_mutex_t replay_start_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t replay_start_cond = PTHREAD_COND_INITIALIZER;
 
-/* 
+/*
  * ========================================================================
  * ==== FORWARD REFERENECES ===============================================
  * ========================================================================
@@ -175,7 +175,7 @@ static void *replay_sub(void *arg);
 static void *replay_rec(void *arg);
 static char usage_str[];
 
-/* 
+/*
  * ========================================================================
  * ==== INLINE ROUTINES ===================================================
  * ========================================================================
@@ -183,13 +183,12 @@ static char usage_str[];
 
 /*
  * The 'fatal' macro will output a perror message (if errstring is !NULL)
- * and display a string (with variable arguments) and then exit with the 
+ * and display a string (with variable arguments) and then exit with the
  * specified exit value.
  */
 
 void fatal(const char *errstring, const int exitval,
-             const char *fmt, ...)
-{
+           const char *fmt, ...) {
     va_list ap;
 
     if (errstring)
@@ -203,29 +202,25 @@ void fatal(const char *errstring, const int exitval,
     /*NOTREACHED*/
 }
 
-static inline long long unsigned du64_to_sec(__u64 du64)
-{
+static inline long long unsigned du64_to_sec(__u64 du64) {
     return (long long unsigned)du64 / (1000 * 1000 * 1000);
 }
 
-static inline long long unsigned du64_to_nsec(__u64 du64)
-{
+static inline long long unsigned du64_to_nsec(__u64 du64) {
     return llabs((long long)du64) % (1000 * 1000 * 1000);
 }
 
 /**
  * min - Return minimum of two integers
  */
-static inline int min(int a, int b)
-{ 
+static inline int min(int a, int b) {
     return a < b ? a : b;
 }
 
 /**
  * minl - Return minimum of two longs
  */
-static inline long minl(long a, long b)
-{ 
+static inline long minl(long a, long b) {
     return a < b ? a : b;
 }
 
@@ -234,8 +229,7 @@ static inline long minl(long a, long b)
  * is_send_done - Returns true if sender should quit early
  * @tip: Per-thread information
  */
-static inline int is_send_done(struct thr_info *tip)
-{
+static inline int is_send_done(struct thr_info *tip) {
     return signal_done || tip->send_done;
 }
 
@@ -243,8 +237,7 @@ static inline int is_send_done(struct thr_info *tip)
  * is_reap_done - Returns true if reaper should quit early
  * @tip: Per-thread information
  */
-static inline int is_reap_done(struct thr_info *tip)
-{
+static inline int is_reap_done(struct thr_info *tip) {
     return signal_done || (tip->iter_send_done && tip->naios_out == 0);
 }
 
@@ -252,30 +245,27 @@ static inline int is_reap_done(struct thr_info *tip)
  * ts2ns - Convert timespec values to a nanosecond value
  */
 #define NS_TICKS        ((__u64)1000 * (__u64)1000 * (__u64)1000)
-static inline __u64 ts2ns(struct timespec *ts)
-{
+static inline __u64 ts2ns(struct timespec *ts) {
     return ((__u64)(ts->tv_sec) * NS_TICKS) + (__u64)(ts->tv_nsec);
 }
 
 /**
  * ts2ns - Convert timeval values to a nanosecond value
  */
-static inline __u64 tv2ns(struct timeval *tp)
-{
+static inline __u64 tv2ns(struct timeval *tp) {
     return ((__u64)(tp->tv_sec)) + ((__u64)(tp->tv_usec) * (__u64)1000);
 }
 
 /**
  * touch_memory - Force physical memory to be allocating it
- * 
+ *
  * For malloc()ed memory we need to /touch/ it to make it really
  * exist. Otherwise, for write's (to storage) things may not work
  * as planned - we see Linux just use a single area to /read/ from
- * (as there isn't any memory that has been associated with the 
+ * (as there isn't any memory that has been associated with the
  * allocated virtual addresses yet).
  */
-static inline void touch_memory(char *buf, size_t bsize)
-{
+static inline void touch_memory(char *buf, size_t bsize) {
 #if defined(PREP_BUFS)
     memset(buf, 0, bsize);
 #else
@@ -283,6 +273,7 @@ static inline void touch_memory(char *buf, size_t bsize)
 
     for (i = 0; i < bsize; i += pgsize)
         buf[i] = 0;
+
 #endif
 }
 
@@ -290,8 +281,7 @@ static inline void touch_memory(char *buf, size_t bsize)
  * buf_alloc - Returns a page-aligned buffer of the specified size
  * @nbytes: Number of bytes to allocate
  */
-static inline void *buf_alloc(size_t nbytes)
-{
+static inline void *buf_alloc(size_t nbytes) {
     void *buf;
 
     if (posix_memalign(&buf, pgsize, nbytes)) {
@@ -303,14 +293,14 @@ static inline void *buf_alloc(size_t nbytes)
 }
 
 /**
- * gettime - Returns current time 
+ * gettime - Returns current time
  */
-inline __u64 gettime(void)
-{
+inline __u64 gettime(void) {
     static int use_clock_gettime = -1;      // Which clock to use
 
     if (use_clock_gettime < 0) {
         use_clock_gettime = clock_getres(CLOCK_MONOTONIC, NULL) == 0;
+
         if (use_clock_gettime) {
             struct timespec ts = {
                 .tv_sec = 0,
@@ -324,8 +314,8 @@ inline __u64 gettime(void)
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
         return ts2ns(&ts);
-    }
-    else {
+
+    } else {
         struct timeval tp;
         gettimeofday(&tp, NULL);
         return tv2ns(&tp);
@@ -335,16 +325,15 @@ inline __u64 gettime(void)
 /**
  * setup_signal - Set up a signal handler for the specified signum
  */
-static inline void setup_signal(int signum, sighandler_t handler)
-{
+static inline void setup_signal(int signum, sighandler_t handler) {
     if (signal(signum, handler) == SIG_ERR) {
         fatal("signal", ERR_SYSCALL, "Failed to set signal %d\n",
-            signum);
+              signum);
         /*NOTREACHED*/
     }
 }
 
-/* 
+/*
  * ========================================================================
  * ==== CONDITION VARIABLE ROUTINES =======================================
  * ========================================================================
@@ -358,9 +347,8 @@ static inline void setup_signal(int signum, sighandler_t handler)
  * @mxv:    Max value for variable (Used only when ASSERTS are on)
  */
 static inline void __set_cv(pthread_mutex_t *pmp, pthread_cond_t *pcp,
-                volatile int *vp, 
-                __attribute__((__unused__))int mxv)
-{
+                            volatile int *vp,
+                            __attribute__((__unused__))int mxv) {
     pthread_mutex_lock(pmp);
     assert(*vp < mxv);
     *vp += 1;
@@ -376,89 +364,83 @@ static inline void __set_cv(pthread_mutex_t *pmp, pthread_cond_t *pcp,
  * @mxv:    Value to wait for
  */
 static inline void __wait_cv(pthread_mutex_t *pmp, pthread_cond_t *pcp,
-                 volatile int *vp, int mxv)
-{
+                             volatile int *vp, int mxv) {
     pthread_mutex_lock(pmp);
+
     while (*vp < mxv)
         pthread_cond_wait(pcp, pmp);
+
     *vp = 0;
     pthread_mutex_unlock(pmp);
 }
 
-static inline void set_reclaim_done(void)
-{
+static inline void set_reclaim_done(void) {
     __set_cv(&reclaim_done_mutex, &reclaim_done_cond, &n_reclaims_done,
-         nfiles);
+             nfiles);
 }
 
-static inline void wait_reclaims_done(void)
-{
+static inline void wait_reclaims_done(void) {
     __wait_cv(&reclaim_done_mutex, &reclaim_done_cond, &n_reclaims_done,
-          nfiles);
+              nfiles);
 }
 
-static inline void set_replay_ready(void)
-{
+static inline void set_replay_ready(void) {
     __set_cv(&replay_ready_mutex, &replay_ready_cond, &n_replays_ready,
-         nfiles);
+             nfiles);
 }
 
-static inline void wait_replays_ready(void)
-{
+static inline void wait_replays_ready(void) {
     __wait_cv(&replay_ready_mutex, &replay_ready_cond, &n_replays_ready,
-          nfiles);
+              nfiles);
 }
 
-static inline void set_replay_done(void)
-{
+static inline void set_replay_done(void) {
     __set_cv(&replay_done_mutex, &replay_done_cond, &n_replays_done,
-        nfiles);
+             nfiles);
 }
 
-static inline void wait_replays_done(void)
-{
+static inline void wait_replays_done(void) {
     __wait_cv(&replay_done_mutex, &replay_done_cond, &n_replays_done,
-          nfiles);
+              nfiles);
 }
 
-static inline void set_iter_done(void)
-{
+static inline void set_iter_done(void) {
     __set_cv(&iter_done_mutex, &iter_done_cond, &n_iters_done,
-        nfiles);
+             nfiles);
 }
 
-static inline void wait_iters_done(void)
-{
+static inline void wait_iters_done(void) {
     __wait_cv(&iter_done_mutex, &iter_done_cond, &n_iters_done,
-          nfiles);
+              nfiles);
 }
 
-static inline void set_replay_start(void)
-{
+static inline void set_replay_start(void) {
     __set_cv(&replay_start_mutex, &replay_start_cond, &n_replays_start,
-         nfiles);
+             nfiles);
 }
 
-static inline void wait_replays_start(void)
-{
+static inline void wait_replays_start(void) {
     __wait_cv(&replay_start_mutex, &replay_start_cond, &n_replays_start,
-          nfiles);
+              nfiles);
 }
 
 /**
- * wait_iter_start - Wait for an iteration to start 
- * 
+ * wait_iter_start - Wait for an iteration to start
+ *
  * This is /slightly/ different: we are waiting for a value to become
- * non-zero, and then we decrement it and go on. 
+ * non-zero, and then we decrement it and go on.
  */
-static inline void wait_iter_start(void)
-{
+static inline void wait_iter_start(void) {
     pthread_mutex_lock(&iter_start_mutex);
+
     while (iter_start == 0)
         pthread_cond_wait(&iter_start_cond, &iter_start_mutex);
+
     assert(1 <= iter_start && iter_start <= nfiles);
+
     if (verbose > 1)
         fprintf(stderr, "\nleft %d file(s) to process\n", iter_start);
+
     iter_start--;
     pthread_mutex_unlock(&iter_start_mutex);
 }
@@ -466,8 +448,7 @@ static inline void wait_iter_start(void)
 /**
  * start_iter - Start an iteration at the replay thread level
  */
-static inline void start_iter(void)
-{
+static inline void start_iter(void) {
     pthread_mutex_lock(&iter_start_mutex);
     assert(iter_start == 0);
     iter_start = nfiles;
@@ -476,14 +457,17 @@ static inline void start_iter(void)
 }
 
 
-static inline void wait_batch_start(void)
-{
+static inline void wait_batch_start(void) {
     pthread_mutex_lock(&batch_start_mutex);
+
     while (batch_start == 0)
         pthread_cond_wait(&batch_start_cond, &batch_start_mutex);
+
     assert(1 <= batch_start && batch_start <= nfiles);
+
     if (verbose > 1)
         fprintf(stderr, "\nleft %d file(s) to process\n", batch_start);
+
     batch_start--;
     pthread_mutex_unlock(&batch_start_mutex);
 }
@@ -491,8 +475,7 @@ static inline void wait_batch_start(void)
 /**
  * start_batch - Start an batch at the replay thread level
  */
-static inline void start_batch(void)
-{
+static inline void start_batch(void) {
     pthread_mutex_lock(&batch_start_mutex);
     assert(batch_start == 0);
     batch_start = nfiles;
@@ -501,7 +484,7 @@ static inline void start_batch(void)
 }
 
 
-/* 
+/*
  * ========================================================================
  * ==== CPU RELATED ROUTINES ==============================================
  * ========================================================================
@@ -510,36 +493,39 @@ static inline void start_batch(void)
 /**
  * get_ncpus - Sets up the global 'ncpus' value
  */
-static void get_ncpus(void)
-{
+static void get_ncpus(void) {
 #ifdef _SC_NPROCESSORS_ONLN
     ncpus = sysconf(_SC_NPROCESSORS_ONLN);
 #else
     int nrcpus = 4096;
-    cpu_set_t * cpus;
-    
+    cpu_set_t *cpus;
+
 realloc:
     cpus = CPU_ALLOC(nrcpus);
     size = CPU_ALLOC_SIZE(nrcpus);
     CPU_ZERO_S(size, cpus);
 
     if (sched_getaffinity(0, size, cpus)) {
-        if( errno == EINVAL && nrcpus < (4096<<4) ) {
+        if( errno == EINVAL && nrcpus < (4096 << 4) ) {
             CPU_FREE(cpus);
             nrcpus <<= 1;
             goto realloc;
         }
+
         fatal("sched_getaffinity", ERR_SYSCALL, "Can't get CPU info\n");
         /*NOTREACHED*/
     }
 
     ncpus = -1;
+
     for (last_cpu = 0; last_cpu < CPU_SETSIZE && CPU_ISSET(last_cpu, &cpus); last_cpu++)
-        if (CPU_ISSET( last_cpu, &cpus) ) 
+        if (CPU_ISSET( last_cpu, &cpus) )
             ncpus = last_cpu;
+
     ncpus++;
     CPU_FREE(cpus);
 #endif
+
     if (ncpus == 0) {
         fatal(NULL, ERR_SYSCALL, "Insufficient number of CPUs\n");
         /*NOTREACHED*/
@@ -550,22 +536,23 @@ realloc:
  * pin_to_cpu - Pin this thread to a specific CPU
  * @tip: Thread information
  */
-static void pin_to_cpu(struct thr_info *tip)
-{
+static void pin_to_cpu(struct thr_info *tip) {
     cpu_set_t *cpus;
     size_t size;
 
     cpus = CPU_ALLOC(ncpus);
-    size = CPU_ALLOC_SIZE(ncpus);   
+    size = CPU_ALLOC_SIZE(ncpus);
 
     assert(0 <= tip->cpu && tip->cpu < ncpus);
 
     CPU_ZERO_S(size, cpus);
     CPU_SET_S(tip->cpu, size, cpus);
+
     if (sched_setaffinity(0, size, cpus)) {
         fatal("sched_setaffinity", ERR_SYSCALL, "Failed to pin CPU\n");
         /*NOTREACHED*/
     }
+
     assert(tip->cpu == sched_getcpu());
 
     if (verbose > 1) {
@@ -574,14 +561,16 @@ static void pin_to_cpu(struct thr_info *tip)
 
         (void)sched_getaffinity(0, size, now);
         fprintf(tip->vfp, "Pinned to CPU %02d ", tip->cpu);
+
         for (i = 0; i < ncpus; i++)
             fprintf(tip->vfp, "%1d", CPU_ISSET_S(i, size, now));
+
         fprintf(tip->vfp, "\n");
     }
 }
 
 
-/* 
+/*
  * ========================================================================
  * ==== IOCB MANAGEMENT ROUTINES ==========================================
  * ========================================================================
@@ -592,8 +581,7 @@ static void pin_to_cpu(struct thr_info *tip)
  * @tip: Per-thread information
  * iocbp: IOCB pointer to update
  */
-static void iocb_init(struct thr_info *tip, struct iocb_pkt *iocbp)
-{
+static void iocb_init(struct thr_info *tip, struct iocb_pkt *iocbp) {
     iocbp->tip = tip;
     iocbp->nbytes = 0;
     iocbp->iocb.u.c.buf = NULL;
@@ -606,8 +594,7 @@ static void iocb_init(struct thr_info *tip, struct iocb_pkt *iocbp)
  * @n: Number of bytes to transfer
  * @off: Offset (in bytes)
  */
-static void iocb_setup(struct iocb_pkt *iocbp, int device, int rw, int n, long long off)
-{
+static void iocb_setup(struct iocb_pkt *iocbp, int device, int rw, int n, long long off) {
     char *buf;
     struct iocb *iop = &iocbp->iocb;
 
@@ -627,10 +614,12 @@ static void iocb_setup(struct iocb_pkt *iocbp, int device, int rw, int n, long l
 
     buf = buf_alloc(n);
     iocbp->nbytes = n;
-// printf("op: %d, device: %d, size: %d, off: %ld\n", iop, device, n, off);
+    // printf("op: %d, device: %d, size: %d, off: %ld\n", iop, device, n, off);
 prep:
+
     if (rw)
         io_prep_pread(iop, device, buf, n, off);
+
     else {
         assert(write_enabled);
         io_prep_pwrite(iop, device, buf, n, off);
@@ -640,7 +629,7 @@ prep:
     iop->data = iocbp;
 }
 
-/* 
+/*
  * ========================================================================
  * ==== PER-THREAD SET UP & TEAR DOWN =====================================
  * ========================================================================
@@ -657,17 +646,20 @@ void open_devices(struct thr_info *tip, char *device_fn) {
 
             struct stat rawst;
             int rst0 = stat(s, &rawst);
+
             if ((rst0 == 0) && S_ISBLK(rawst.st_mode)) {    // blk device
                 int blk_flags = O_RDWR | O_LARGEFILE | O_SYNC | O_DIRECT;
                 tip->devices[i] = open(s, blk_flags);
+
                 if (tip->devices[i] < 0) {
                     fprintf(stderr, "open '%s' error !\n", s);
                     exit(1);
                 }
-            }
-            else {  // is a normal file anyway
+
+            } else { // is a normal file anyway
                 int blk_flags = O_CREAT | O_RDWR | O_LARGEFILE;
                 tip->devices[i] = open(s, blk_flags);
+
                 if (tip->devices[i] < 0) {
                     fprintf(stderr, "open '%s' error !\n", s);
                     exit(1);
@@ -704,8 +696,7 @@ void init_buf_space(struct buf_space **bs_ptr) {
 /**
  * tip_init - Per thread initialization function
  */
-static void tip_init(struct thr_info *tip)
-{
+static void tip_init(struct thr_info *tip) {
     int i;
 
     INIT_LIST_HEAD(&tip->free_iocbs);
@@ -733,6 +724,7 @@ static void tip_init(struct thr_info *tip)
         iocb_init(tip, iocbp);
         list_add_tail(&iocbp->head, &tip->free_iocbs);
     }
+
     tip->naios_free = naios;
 
     open_devices(tip, device_fn);
@@ -741,14 +733,14 @@ static void tip_init(struct thr_info *tip)
     init_buf_space(&tip->bs);
 
     if (pthread_create(&tip->sub_thread, NULL, replay_sub, tip)) {
-        fatal("pthread_create", ERR_SYSCALL, 
-            "thread create failed\n");
+        fatal("pthread_create", ERR_SYSCALL,
+              "thread create failed\n");
         /*NOTREACHED*/
     }
 
     if (pthread_create(&tip->rec_thread, NULL, replay_rec, tip)) {
-        fatal("pthread_create", ERR_SYSCALL, 
-            "thread create failed\n");
+        fatal("pthread_create", ERR_SYSCALL,
+              "thread create failed\n");
         /*NOTREACHED*/
     }
 }
@@ -756,8 +748,7 @@ static void tip_init(struct thr_info *tip)
 /**
  * tip_release - Release resources associated with this thread
  */
-static void tip_release(struct thr_info *tip)
-{
+static void tip_release(struct thr_info *tip) {
     struct list_head *p, *q;
 
     assert(tip->send_done);
@@ -769,6 +760,7 @@ static void tip_release(struct thr_info *tip)
         fatal("pthread_join", ERR_SYSCALL, "pthread sub join failed\n");
         /*NOTREACHED*/
     }
+
     if (pthread_join(tip->rec_thread, NULL)) {
         fatal("pthread_join", ERR_SYSCALL, "pthread rec join failed\n");
         /*NOTREACHED*/
@@ -781,8 +773,10 @@ static void tip_release(struct thr_info *tip)
         struct iocb_pkt *iocbp = list_entry(p, struct iocb_pkt, head);
 
         list_del(&iocbp->head);
-        if (iocbp->nbytes) 
+
+        if (iocbp->nbytes)
             free(iocbp->iocb.u.c.buf);
+
         free(iocbp);
     }
 
@@ -799,14 +793,13 @@ static void tip_release(struct thr_info *tip)
  * rem_input_file - Release resources associated with an input file
  * @tip: Per-input file information
  */
-static void rem_input_file(struct thr_info *tip)
-{
+static void rem_input_file(struct thr_info *tip) {
     tip_release(tip);
 }
 
 
 
-/* 
+/*
  * ========================================================================
  * ==== RECLAIM ROUTINES ==================================================
  * ========================================================================
@@ -817,30 +810,33 @@ static void rem_input_file(struct thr_info *tip)
  *
  * Will return 0 if we are done
  */
-static int reap_wait_aios(struct thr_info *tip)
-{
+static int reap_wait_aios(struct thr_info *tip) {
     int naios = 0;
 
     if (!is_reap_done(tip)) {
         pthread_mutex_lock(&tip->mutex);
+
         while (tip->naios_out == 0 && !tip->iter_send_done && !tip->send_done && tip->wq->queue_size == 0) {
             tip->reap_wait = 1;
             // fprintf(stderr, "in reap_wait_aios: before waiting, send_done %d\n", tip->send_done);
 
             if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
-                fatal("pthread_cond_wait", ERR_SYSCALL, 
-                    "nfree_current cond wait failed\n");
+                fatal("pthread_cond_wait", ERR_SYSCALL,
+                      "nfree_current cond wait failed\n");
                 /*NOTREACHED*/
             }
         }
+
         if (tip->wq->queue_size > 0) {
             pthread_mutex_unlock(&tip->mutex);
             write_process(tip);
             pthread_mutex_lock(&tip->mutex);
         }
+
         naios = tip->naios_out;
         pthread_mutex_unlock(&tip->mutex);
     }
+
     assert(is_reap_done(tip) || naios > 0);
 
     return is_reap_done(tip) ? 0 : naios;
@@ -864,17 +860,19 @@ void write_process(struct thr_info *tip) {
         reqs[0].stripe_id = 0;
 
         int ok = iocbs_map(tip, list, reqs, ntodo, 1);
+
         if (!ok) {
             enqueue(tip->wq, disk_num, offset);
             break;
         }
+
         int ndone = io_submit(tip->ctx, ntodo, list);
 
         if (ndone != (long)ntodo) {
             fatal("io_submit", ERR_SYSCALL,
-                "%d: io_submit(%d:%ld) failed in write (%s)\n", 
-                tip->cpu, ntodo, ndone, 
-                strerror(labs(ndone)));
+                  "%d: io_submit(%d:%ld) failed in write (%s)\n",
+                  tip->cpu, ntodo, ndone,
+                  strerror(labs(ndone)));
             /*NOTREACHED*/
         }
 
@@ -888,21 +886,22 @@ void write_process(struct thr_info *tip) {
  * @tip: Per-thread information
  * @naios_out: Number of AIOs we have outstanding (min)
  */
-static void reclaim_ios(struct thr_info *tip, long naios_out)
-{
+static void reclaim_ios(struct thr_info *tip, long naios_out) {
     long i, ndone;
     struct io_event *evp, events[naios_out];
 
 again:
     assert(naios > 0);
+
     for (;;) {
         ndone = io_getevents(tip->ctx, 1, naios_out, events, NULL);
+
         if (ndone > 0)
             break;
 
         if (errno && errno != EINTR) {
-            fatal("io_getevents", ERR_SYSCALL, 
-                "io_getevents failed\n");
+            fatal("io_getevents", ERR_SYSCALL,
+                  "io_getevents failed\n");
             /*NOTREACHED*/
         }
     }
@@ -912,28 +911,28 @@ again:
 
         if (evp->res != iocbp->iocb.u.c.nbytes) {
             fatal(NULL, ERR_SYSCALL,
-                      "Event failure %ld/%ld\t(%ld + %ld)\n",
-                      (long)evp->res, (long)evp->res2,
-                      (long)iocbp->iocb.u.c.offset / nb_sec, 
-            (long)iocbp->iocb.u.c.nbytes / nb_sec);
-                /*NOTREACHED*/
-        }
-        else if (iocbp->op == 'R') {
+                  "Event failure %ld/%ld\t(%ld + %ld)\n",
+                  (long)evp->res, (long)evp->res2,
+                  (long)iocbp->iocb.u.c.offset / nb_sec,
+                  (long)iocbp->iocb.u.c.nbytes / nb_sec);
+            /*NOTREACHED*/
+
+        } else if (iocbp->op == 'R') {
             if (iocbp->stripe_id != -1) {
                 tip->bs->left_nums[iocbp->stripe_id]--;
-                
+
                 if (tip->bs->left_nums[iocbp->stripe_id] == 0) {
                     if (tip->wq->queue_size == tip->wq->queue_len) {
                         fprintf(stderr, "group_wait_queue overflow!\n");
                         exit(1);
                     }
+
                     enqueue(tip->wq, tip->bs->disk_dst[iocbp->stripe_id], tip->bs->offset_dst[iocbp->stripe_id]);
                     write_process(tip);
                 }
             }
 
-        }
-        else {
+        } else {
             if (iocbp->stripe_id != -1) {
                 tip->bs->left_stripes--;
             }
@@ -943,7 +942,7 @@ again:
         list_move_tail(&iocbp->head, &tip->free_iocbs);
         tip->naios_free++;
         tip->naios_out--;
-tip->rcount++;
+        tip->rcount++;
         pthread_mutex_unlock(&tip->mutex);
     }
 
@@ -955,13 +954,14 @@ tip->rcount++;
     if (tip->send_wait && tip->wait_all_finish == 0) {
         tip->send_wait = 0;
         pthread_cond_signal(&tip->cond);
-    }
-    else if (tip->send_wait && tip->bs->left_stripes == 0) {
+
+    } else if (tip->send_wait && tip->bs->left_stripes == 0) {
         fprintf(stderr, "wakeup, next region\n");
         tip->wait_all_finish = 0;
         tip->send_wait = 0;
         pthread_cond_signal(&tip->cond);
     }
+
     pthread_mutex_unlock(&tip->mutex);
 
     /*
@@ -975,14 +975,13 @@ tip->rcount++;
  * replay_rec - Worker thread to reclaim AIOs
  * @arg: Pointer to thread information
  */
-static void *replay_rec(void *arg)
-{
+static void *replay_rec(void *arg) {
     long naios_out;
     struct thr_info *tip = arg;
 
     while (!is_send_done(tip)) {
 
-        while ((naios_out = reap_wait_aios(tip)) > 0) 
+        while ((naios_out = reap_wait_aios(tip)) > 0)
             reclaim_ios(tip, naios_out);
 
         set_iter_done();
@@ -995,7 +994,7 @@ static void *replay_rec(void *arg)
     return NULL;
 }
 
-/* 
+/*
  * ========================================================================
  * ==== REPLAY ROUTINES ===================================================
  * ========================================================================
@@ -1009,20 +1008,22 @@ static void *replay_rec(void *arg)
  *
  * Returns 0 if we have some condition that causes us to exit
  */
-static int nfree_current(struct thr_info *tip)
-{
+static int nfree_current(struct thr_info *tip) {
     int nfree = 0;
 
     pthread_mutex_lock(&tip->mutex);
+
     while (!is_send_done(tip) && ((nfree = tip->naios_free) < 1)) {
         tip->send_wait = 1;
+
         // fprintf(stderr, "error? send thread wait now!\n");
         if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
-            fatal("pthread_cond_wait", ERR_SYSCALL, 
-                "nfree_current cond wait failed\n");
+            fatal("pthread_cond_wait", ERR_SYSCALL,
+                  "nfree_current cond wait failed\n");
             /*NOTREACHED*/
         }
     }
+
     // tip->naios_free--;
     pthread_mutex_unlock(&tip->mutex);
 
@@ -1038,41 +1039,45 @@ static int nfree_current(struct thr_info *tip)
  * @pkts: AIOs to map
  * @ntodo: Number of AIOs to map
  */
-int iocbs_map(struct thr_info *tip, struct iocb **list, 
-                         struct request_info *pkts, int ntodo, int which_thread)
-{
+int iocbs_map(struct thr_info *tip, struct iocb **list,
+              struct request_info *pkts, int ntodo, int which_thread) {
     int i;
     struct request_info *pkt;
 
     assert(0 < ntodo && ntodo <= naios);
 
     pthread_mutex_lock(&tip->mutex);
+
     if (which_thread == 1 && tip->naios_free < ntodo) {
         pthread_mutex_unlock(&tip->mutex);
         return 0;
     }
+
     for (i = 0, pkt = pkts; i < ntodo; i++, pkt++) {
         while (tip->naios_free < 1) {
             tip->send_wait = 1;
+
             // fprintf(stderr, "error? send thread wait now!\n");
             if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
-                fatal("pthread_cond_wait", ERR_SYSCALL, 
-                    "nfree_current cond wait failed\n");
+                fatal("pthread_cond_wait", ERR_SYSCALL,
+                      "nfree_current cond wait failed\n");
                 /*NOTREACHED*/
             }
         }
+
         tip->naios_free--;
 
         int rw = pkt->type;
         struct iocb_pkt *iocbp;
-        
+
         iocbp = list_entry(tip->free_iocbs.next, struct iocb_pkt, head);
         iocb_setup(iocbp, tip->devices[pkt->disk_num], rw, pkt->size, pkt->offset);
 
         iocbp->op = rw ? 'R' : 'W';
         iocbp->stripe_id = pkt->stripe_id;
-if (iocbp->stripe_id != -1 && rw == 0)
-	tip->scount++;
+
+        if (iocbp->stripe_id != -1 && rw == 0)
+            tip->scount++;
 
         list_move_tail(&iocbp->head, &tip->used_iocbs);
         list[i] = &iocbp->iocb;
@@ -1088,8 +1093,7 @@ if (iocbp->stripe_id != -1 && rw == 0)
 /**
  * replay_sub - Worker thread to submit AIOs that are being replayed
  */
-static void *replay_sub(void *arg)
-{
+static void *replay_sub(void *arg) {
     unsigned int i;
     char *mdev;
     char path[MAXPATHLEN];
@@ -1104,11 +1108,13 @@ static void *replay_sub(void *arg)
 
     if (tip->ainfo->method == 0)
         raid5_online_recover(tip);
+
     else
         oi_raid_online_recover(tip);
 
     pthread_mutex_lock(&tip->mutex);
     tip->iter_send_done = 1;
+
     if (tip->reap_wait == 1) {
         tip->reap_wait = 0;
         pthread_cond_signal(&tip->cond);
@@ -1118,10 +1124,12 @@ static void *replay_sub(void *arg)
 
     pthread_mutex_lock(&tip->mutex);
     tip->send_done = 1;
+
     if (tip->reap_wait == 1) {
         tip->reap_wait = 0;
         pthread_cond_signal(&tip->cond);
     }
+
     pthread_mutex_unlock(&tip->mutex);
 
     set_replay_done();
@@ -1138,31 +1146,44 @@ static void *replay_sub(void *arg)
  *
  * Does rudimentary parameter verification as well.
  */
-static void handle_args(struct thr_info *tip, int argc, char *argv[])
-{
+static void handle_args(struct thr_info *tip, int argc, char *argv[]) {
     if (argc != 8) {
         fprintf(stderr, "%s: method v k chunk_size capacity devices_file\n", argv[0]);
         exit(1);
     }
+
     struct addr_info *ainfo = (struct addr_info *) malloc(sizeof(struct addr_info));
+
     ainfo->method = atoi(argv[1]);
+
     ainfo->v = atoi(argv[2]);
+
     ainfo->k = atoi(argv[3]);
+
     ainfo->g = 3;
+
     ainfo->failedDisk = 9;
+
     ainfo->strip_size = atoi(argv[4]);  //KB
+
     ainfo->strip_size *= 1024;
+
     ainfo->capacity = atoi(argv[5]);    //MB
+
     ainfo->capacity *= 1024 * 1024;
+
     ainfo->max_stripes = CACHED_STRIPE_NUM;
+
     device_fn = argv[6];
+
     ainfo->trace_fn = argv[7];
 
-tip->scount = tip->rcount = 0;
+    tip->scount = tip->rcount = 0;
+
     tip->ainfo = ainfo;
 }
 
-/* 
+/*
  * ========================================================================
  * ==== MAIN ROUTINE ======================================================
  * ========================================================================
@@ -1171,19 +1192,17 @@ tip->scount = tip->rcount = 0;
 /**
  * set_signal_done - Signal handler, catches signals & sets signal_done
  */
-static void set_signal_done(__attribute__((__unused__))int signum)
-{
+static void set_signal_done(__attribute__((__unused__))int signum) {
     signal_done = 1;
 }
 
 
 /**
- * main - 
+ * main -
  * @argc: Number of arguments
  * @argv: Array of arguments
  */
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     int i;
 
     pgsize = getpagesize();
@@ -1208,8 +1227,10 @@ int main(int argc, char *argv[])
     for (i = 0; i < def_iterations; i++) {
         rgenesis = gettime();
         start_iter();
+
         if (verbose)
             fprintf(stderr, "I");
+
         wait_iters_done();
     }
 
