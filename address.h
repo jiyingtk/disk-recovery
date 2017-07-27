@@ -20,6 +20,7 @@ struct addr_info {
 
     char *trace_fn;
     int max_stripes;
+    int requestsPerSecond;
 };
 
 int requestPerSecond = 0;
@@ -215,7 +216,8 @@ void oi_sub_raid_request(struct thr_info *tip, int subRAIDAddr, int disks[] , in
     int dataDiskNum = ainfo->k - 1;
     int stripeId;
     int inStripeAddr, inBlockId;       //data的位置，在条带内部
-    int blockId[4], diskId[4];     //全磁盘， 可能涉及到4个块，1个data和3个parity
+    int diskId[4];     //全磁盘， 可能涉及到4个块，1个data和3个parity
+    addr_type blockId[4];
     int reqBlockNum;
 
     int virDiskId[2]; //虚拟磁盘号：0,1或2
@@ -227,7 +229,6 @@ void oi_sub_raid_request(struct thr_info *tip, int subRAIDAddr, int disks[] , in
 
     if(reqSize % BLOCK == 0) {
         reqBlockNum = reqSize / BLOCK;
-
     } else {
         reqBlockNum = reqSize / BLOCK + 1;
     }
@@ -427,7 +428,8 @@ void raid5_3time7disks_request(struct thr_info *tip, int logicAddr, int reqSize,
     int dataDiskNum = ainfo->k - 1;
     int dataPerStripe = (dataDiskNum + 1) * dataDiskNum;
     int maxOffset, reqBlockNum;
-    int stripeId, groupId, inStripeAddr, inBlockId, diskId, blockId, sectorId;
+    int stripeId, groupId, inStripeAddr, inBlockId, diskId, sectorId;
+    addr_type blockId;
 
     maxOffset = ainfo->capacity_total;
 
@@ -636,7 +638,7 @@ void raid5_online_recover(struct thr_info *tip) {
 
             int reqest_count = 0;
 
-            while (reqest_count < 20) {
+            while (reqest_count < ainfo->requestsPerSecond) {
                 int retCode;
                 retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
 
@@ -793,7 +795,7 @@ void oi_raid_online_recover(struct thr_info *tip) {
 
         int reqest_count = 0;
 
-        while (reqest_count < 20 * ainfo->r * (ainfo->g - 1)) {
+        while (reqest_count < ainfo->requestsPerSecond) {
             int retCode;
             retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
 

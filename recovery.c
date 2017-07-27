@@ -1147,8 +1147,8 @@ static void *replay_sub(void *arg) {
  * Does rudimentary parameter verification as well.
  */
 static void handle_args(struct thr_info *tip, int argc, char *argv[]) {
-    if (argc != 8) {
-        fprintf(stderr, "%s: method v k chunk_size capacity devices_file\n", argv[0]);
+    if (argc != 9) {
+        fprintf(stderr, "%s: method v k chunk_size capacity devices_file trace_file requests_per_second\n", argv[0]);
         exit(1);
     }
 
@@ -1177,6 +1177,8 @@ static void handle_args(struct thr_info *tip, int argc, char *argv[]) {
     device_fn = argv[6];
 
     ainfo->trace_fn = argv[7];
+
+    ainfo->requestsPerSecond = atoi(argv[8]);
 
     tip->scount = tip->rcount = 0;
 
