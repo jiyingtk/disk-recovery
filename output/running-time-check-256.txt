@@ -1,26 +1,18 @@
 raid5 offline disknum 27 capacity 100G
-634.815616165
+raid5 offline disknum 27 capacity 100G
+574.714098223
 oi-raid offline disknum 27 capacity 100G
-139.790088111
+140.109873850
 raid5 offline disknum 45 capacity 100G
-777.880979152
+702.567823736
 oi-raid offline disknum 45 capacity 100G
-178.515440008
+177.912332194
 raid5 offline disknum 57 capacity 100G
-645.162020872
+587.272701953
 oi-raid offline disknum 57 capacity 100G
-147.155411397
+138.638890925
 
 online
 raid5 online disknum 27 capacity 100G
-822.800136258
+798.983132155
 oi-raid online disknum 27 capacity 100G
-168.216076296
-raid5 online disknum 45 capacity 100G
-957.633840176
-oi-raid online disknum 45 capacity 100G
-178.975412330
-raid5 online disknum 57 capacity 100G
-795.238816302
-oi-raid online disknum 57 capacity 100G
-152.240207813

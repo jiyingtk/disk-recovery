@@ -27,7 +27,7 @@
 #define ERR_SYSCALL         2
 
 #define MAX_DEVICE_NUM 128
-#define CACHED_STRIPE_NUM 256
+#define CACHED_STRIPE_NUM 512
 
 #include <getopt.h>
 
@@ -63,6 +63,10 @@ void destroy_queue(struct wait_queue *wq) {
 }
 
 void enqueue(struct wait_queue *wq, int disk_num, addr_type offset) {
+    if (wq->queue_size == wq->queue_len) {
+        fprintf(stderr, "queue overflow!");
+        exit(1);
+    }
     wq->data[wq->queue_head] = disk_num;
     wq->data2[wq->queue_head] = offset;
     wq->queue_head = (wq->queue_head + 1) % wq->queue_len;
@@ -729,7 +733,7 @@ static void tip_init(struct thr_info *tip) {
 
     open_devices(tip, device_fn);
     init_addr_info(tip->ainfo);
-    init_queue(&tip->wq, 1024);
+    init_queue(&tip->wq, 10240);
     init_buf_space(&tip->bs);
 
     if (pthread_create(&tip->sub_thread, NULL, replay_sub, tip)) {
@@ -876,7 +880,9 @@ void write_process(struct thr_info *tip) {
             /*NOTREACHED*/
         }
 
+        pthread_mutex_lock(&tip->mutex);
         tip->naios_out += ndone;
+        pthread_mutex_unlock(&tip->mutex);
     }
 
 }
