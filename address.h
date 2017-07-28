@@ -67,10 +67,10 @@ void init_parameters(struct addr_info *ainfo) {
 
 void init_addr_info(struct addr_info *ainfo) {
     char fn[128];
-    sprintf(fn, "%d_%d.bibd", ainfo->v, ainfo->k);
+    sprintf(fn, "%d.%d.bd", ainfo->v, ainfo->k);
     FILE *bibd_f = fopen(fn, "r");
 
-    fscanf(bibd_f, "%d %d %d %d %d", &ainfo->b, &ainfo->v, &ainfo->r, &ainfo->k, &ainfo->lambda);
+    fscanf(bibd_f, "%d %d %d %d %d", &ainfo->b, &ainfo->v, &ainfo->k, &ainfo->r, &ainfo->lambda);
 
     init_parameters(ainfo);
 
