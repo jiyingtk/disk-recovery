@@ -1250,3 +1250,87 @@ wakeup, next region
 progress 23/100
 progress 24/100
 wakeup, next region
+progress 25/100
+wakeup, next region
+progress 26/100
+progress 27/100
+wakeup, next region
+progress 28/100
+wakeup, next region
+progress 29/100
+progress 30/100
+wakeup, next region
+progress 31/100
+progress 32/100
+wakeup, next region
+progress 33/100
+wakeup, next region
+progress 34/100
+progress 35/100
+wakeup, next region
+progress 36/100
+wakeup, next region
+progress 37/100
+progress 38/100
+wakeup, next region
+progress 39/100
+progress 40/100
+wakeup, next region
+progress 41/100
+wakeup, next region
+progress 42/100
+progress 43/100
+wakeup, next region
+progress 44/100
+wakeup, next region
+progress 45/100
+progress 46/100
+wakeup, next region
+progress 47/100
+progress 48/100
+wakeup, next region
+progress 49/100
+wakeup, next region
+progress 50/100
+progress 51/100
+wakeup, next region
+progress 52/100
+wakeup, next region
+progress 53/100
+progress 54/100
+wakeup, next region
+progress 55/100
+progress 56/100
+wakeup, next region
+progress 57/100
+wakeup, next region
+progress 58/100
+progress 59/100
+wakeup, next region
+progress 60/100
+wakeup, next region
+progress 61/100
+progress 62/100
+wakeup, next region
+progress 63/100
+progress 64/100
+wakeup, next region
+progress 65/100
+wakeup, next region
+progress 66/100
+progress 67/100
+wakeup, next region
+progress 68/100
+wakeup, next region
+progress 69/100
+progress 70/100
+wakeup, next region
+progress 71/100
+progress 72/100
+wakeup, next region
+progress 73/100
+wakeup, next region
+progress 74/100
+progress 75/100
+wakeup, next region
+progress 76/100
