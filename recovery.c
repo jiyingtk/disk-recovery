@@ -32,7 +32,7 @@
 #include <getopt.h>
 
 #include "list.h"
-// #include "btrecord.h"
+#include "hashtable.h"
 
 #include "recovery.h"
 #include "address.h"
@@ -726,6 +726,9 @@ static void tip_init(struct thr_info *tip) {
     }
 
     tip->naios_free = naios;
+    tip->ht_left = create_hashtable(128, long long, int);
+    tip->ht_disk = create_hashtable(128, long long, int);
+    tip->ht_offset = create_hashtable(128, long long, long long);
 
     open_devices(tip, device_fn);
     init_addr_info(tip->ainfo);
@@ -779,6 +782,10 @@ static void tip_release(struct thr_info *tip) {
 
         free(iocbp);
     }
+
+    hash_free(tip->ht_left);
+    hash_free(tip->ht_disk);
+    hash_free(tip->ht_offset);
 
     destroy_addr_info(tip->ainfo);
     close_devices(tip, device_fn);
@@ -919,23 +926,33 @@ again:
 
         } else if (iocbp->op == 'R') {
             if (iocbp->stripe_id != -1) {
-                tip->bs->left_nums[iocbp->stripe_id]--;
+                int left_nums;
+                hash_find(tip->ht_left, iocbp->stripe_id, &left_nums);
 
-                if (tip->bs->left_nums[iocbp->stripe_id] == 0) {
+                if (left_nums == 1) {
                     if (tip->wq->queue_size == tip->wq->queue_len) {
                         fprintf(stderr, "group_wait_queue overflow!\n");
                         exit(1);
                     }
+                    int disk_num;
+                    addr_type offset;
+                    hash_find(tip->ht_disk, iocbp->stripe_id, &disk_num);
+                    hash_find(tip->ht_offset, iocbp->stripe_id, &offset);
+                    enqueue(tip->wq, disk_num, offset);
 
-                    enqueue(tip->wq, tip->bs->disk_dst[iocbp->stripe_id], tip->bs->offset_dst[iocbp->stripe_id]);
+                    hash_del(tip->ht_left, iocbp->stripe_id);
+                    hash_del(tip->ht_disk, iocbp->stripe_id);
+                    hash_del(tip->ht_offset, iocbp->stripe_id);
+                    
                     write_process(tip);
+                }
+                else {
+                    hash_add(tip->ht_left, iocbp->stripe_id, left_nums - 1);
                 }
             }
 
         } else {
-            if (iocbp->stripe_id != -1) {
-                tip->bs->left_stripes--;
-            }
+            
         }
 
         pthread_mutex_lock(&tip->mutex);
@@ -955,11 +972,6 @@ again:
         tip->send_wait = 0;
         pthread_cond_signal(&tip->cond);
 
-    } else if (tip->send_wait && tip->bs->left_stripes == 0) {
-        fprintf(stderr, "wakeup, next region\n");
-        tip->wait_all_finish = 0;
-        tip->send_wait = 0;
-        pthread_cond_signal(&tip->cond);
     }
 
     pthread_mutex_unlock(&tip->mutex);

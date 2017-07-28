@@ -57,6 +57,7 @@ struct thr_info {
     struct addr_info *ainfo;
     struct wait_queue *wq;
     struct buf_space *bs;
+    HashTable *ht_left, *ht_disk, *ht_offset;
     addr_type progress, safe;
     int scount, rcount;
 };

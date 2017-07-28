@@ -1,1 +1,1 @@
-recovery.o: recovery.c list.h recovery.h address.h
+recovery.o: recovery.c list.h util/hashtable.h recovery.h address.h

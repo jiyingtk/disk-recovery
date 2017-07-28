@@ -570,7 +570,7 @@ void raid5_online_recover(struct thr_info *tip) {
         step = 1;
     }
 
-    tip->bs->left_stripes = ainfo->max_stripes;
+    // tip->bs->left_stripes = ainfo->max_stripes;
     fprintf(stderr, "start recover [raid5], total size %fGB\n", ainfo->r * (ainfo->g - 1) * ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024);
 
     for(i = 0; i < ainfo->r * (ainfo->g - 1); i++) {
@@ -580,36 +580,38 @@ void raid5_online_recover(struct thr_info *tip) {
                 fprintf(stderr, "progress %d/%d\n", cur, max);
             }
 
-            if (processed_stripes != 0 && processed_stripes % ainfo->max_stripes == 0) {   //du64_to_sec(gettime() - last_time) >= 10
-                printf("wait reclaim\n");
-                pthread_mutex_lock(&tip->mutex);
-                tip->send_wait = 1;
-                tip->wait_all_finish = 1;
+            // if (processed_stripes != 0 && processed_stripes % ainfo->max_stripes == 0) {   //du64_to_sec(gettime() - last_time) >= 10
+            //     printf("wait reclaim\n");
+            //     pthread_mutex_lock(&tip->mutex);
+            //     tip->send_wait = 1;
+            //     tip->wait_all_finish = 1;
 
-                if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
-                    fatal("pthread_cond_wait", ERR_SYSCALL,
-                          "time cond wait failed\n");
-                    /*NOTREACHED*/
-                }
+            //     if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
+            //         fatal("pthread_cond_wait", ERR_SYSCALL,
+            //               "time cond wait failed\n");
+            //         /*NOTREACHED*/
+            //     }
 
-                last_time = gettime();
-                tip->bs->left_stripes = ainfo->max_stripes;
-                pthread_mutex_unlock(&tip->mutex);
-            }
+            //     last_time = gettime();
+            //     tip->bs->left_stripes = ainfo->max_stripes;
+            //     pthread_mutex_unlock(&tip->mutex);
+            // }
 
             int ntodo = ainfo->k - 1, ndone;
 
+            addr_type stripe_id = gettime();
             for(k = 0; k < ainfo->k - 1; k++) {
                 reqs[k].type = 1;
                 reqs[k].disk_num = disks[k];
                 reqs[k].offset = (i * ainfo->blocks_partition + j * ainfo->blocks_per_strip) * BLOCK;
                 reqs[k].size = ainfo->strip_size;
-                reqs[k].stripe_id = processed_stripes % ainfo->max_stripes;
+                reqs[k].stripe_id = stripe_id;
             }
 
-            tip->bs->left_nums[processed_stripes % ainfo->max_stripes] = ainfo->k - 1;
-            tip->bs->disk_dst[processed_stripes % ainfo->max_stripes] = ainfo->failedDisk;
-            tip->bs->offset_dst[processed_stripes % ainfo->max_stripes] = (i * ainfo->blocks_partition + j * ainfo->blocks_per_strip) * BLOCK;
+            hash_add(tip->ht_left, stripe_id, ainfo->k - 1);
+            hash_add(tip->ht_disk, stripe_id, ainfo->failedDisk);
+            hash_add(tip->ht_offset, stripe_id, (i * ainfo->blocks_partition + j * ainfo->blocks_per_strip) * BLOCK);
+
             iocbs_map(tip, list, reqs, ntodo, 0);
 
             ndone = io_submit(tip->ctx, ntodo, list);
@@ -725,7 +727,7 @@ void oi_raid_online_recover(struct thr_info *tip) {
         step = 1;
     }
 
-    tip->bs->left_stripes = ainfo->max_stripes;
+    // tip->bs->left_stripes = ainfo->max_stripes;
     fprintf(stderr, "start recover [oi-raid], total size %fGB\n", ainfo->r * (ainfo->g - 1) * ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024);
 
     for(i = 0; i < ainfo->strips_partition; i++) {
@@ -735,36 +737,37 @@ void oi_raid_online_recover(struct thr_info *tip) {
         int req_count = 0;
 
         for(j = 0; j < ainfo->r * (ainfo->g - 1); j++) {
-            if (processed_stripes != 0 && processed_stripes % ainfo->max_stripes == 0) {   //du64_to_sec(gettime() - last_time) >= 10
-                // printf("time wait\n");
-                pthread_mutex_lock(&tip->mutex);
-                tip->send_wait = 1;
-                tip->wait_all_finish = 1;
+            // if (processed_stripes != 0 && processed_stripes % ainfo->max_stripes == 0) {   //du64_to_sec(gettime() - last_time) >= 10
+            //     // printf("time wait\n");
+            //     pthread_mutex_lock(&tip->mutex);
+            //     tip->send_wait = 1;
+            //     tip->wait_all_finish = 1;
 
-                if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
-                    fatal("pthread_cond_wait", ERR_SYSCALL,
-                          "time cond wait failed\n");
-                    /*NOTREACHED*/
-                }
+            //     if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
+            //         fatal("pthread_cond_wait", ERR_SYSCALL,
+            //               "time cond wait failed\n");
+            //         /*NOTREACHED*/
+            //     }
 
-                last_time = gettime();
-                tip->bs->left_stripes = ainfo->max_stripes;
-                pthread_mutex_unlock(&tip->mutex);
-            }
+            //     last_time = gettime();
+            //     tip->bs->left_stripes = ainfo->max_stripes;
+            //     pthread_mutex_unlock(&tip->mutex);
+            // }
+
+            addr_type stripe_id = gettime();
 
             for(k = 0; k < ainfo->k - 1; k++) {
-
                 reqs[req_count].type = 1;
                 reqs[req_count].disk_num = disks[j][k];
                 reqs[req_count].offset = (offsets[j][k] * ainfo->blocks_partition + i * ainfo->blocks_per_strip) * BLOCK;
                 reqs[req_count].size = ainfo->strip_size;
-                reqs[req_count].stripe_id = processed_stripes % ainfo->max_stripes;
+                reqs[req_count].stripe_id = stripe_id;
                 req_count++;
             }
 
-            tip->bs->left_nums[processed_stripes % ainfo->max_stripes] = ainfo->k - 1;
-            tip->bs->disk_dst[processed_stripes % ainfo->max_stripes] = spareOffset % ainfo->disk_nums;
-            tip->bs->offset_dst[processed_stripes % ainfo->max_stripes] = (ainfo->data_blocks + spareOffset / ainfo->disk_nums * ainfo->blocks_per_strip) * BLOCK;
+            hash_add(tip->ht_left, stripe_id, ainfo->k - 1);
+            hash_add(tip->ht_disk, stripe_id, spareOffset % ainfo->disk_nums);
+            hash_add(tip->ht_offset, stripe_id, (ainfo->data_blocks + spareOffset / ainfo->disk_nums * ainfo->blocks_per_strip) * BLOCK);
 
             spareOffset++;
             processed_stripes++;
