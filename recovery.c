@@ -732,7 +732,7 @@ static void tip_init(struct thr_info *tip) {
 
     open_devices(tip, device_fn);
     init_addr_info(tip->ainfo);
-    init_queue(&tip->wq, 1024);
+    init_queue(&tip->wq, 102400);
     init_buf_space(&tip->bs);
 
     if (pthread_create(&tip->sub_thread, NULL, replay_sub, tip)) {
