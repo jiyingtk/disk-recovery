@@ -1,21 +1,18 @@
-raid5 disk 21 v 7 k 3 g 3 block_size 4MB disk_size 1G
-5.071947414
-oi-raid disk 21 v 7 k 3 g 3 block_size 4MB disk_size 1G
-1.706469524
-55.952424234
-14.736146492
-5.581097554
-57.225649474
-58.258887471
-59.155233015
-15.858907980
-9.096866072
-155.194426328
-76.312655531
-77.695601138
-48.736665717
-76.373850422
-20.188705004
-15.030002481
-23.899299658
-78.053484896
+raid5 offline disknum 27 capacity 100G
+raid5 offline disknum 27 capacity 100G
+574.714098223
+oi-raid offline disknum 27 capacity 100G
+140.109873850
+raid5 offline disknum 45 capacity 100G
+702.567823736
+oi-raid offline disknum 45 capacity 100G
+177.912332194
+raid5 offline disknum 57 capacity 100G
+587.272701953
+oi-raid offline disknum 57 capacity 100G
+138.638890925
+
+online
+raid5 online disknum 27 capacity 100G
+798.983132155
+oi-raid online disknum 27 capacity 100G
