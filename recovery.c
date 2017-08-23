@@ -1114,9 +1114,18 @@ static void *replay_sub(void *arg) {
 
     if (tip->ainfo->method == 0)
         raid5_online_recover(tip);
-
-    else
+    else if (tip->ainfo->method == 1)
         oi_raid_online_recover(tip);
+    else if (tip->ainfo->method == 2)
+        rs_online_recover(tip);
+    else if (tip->ainfo->method == 3)
+        s2_raid_online_recover(tip);
+    else if (tip->ainfo->method == 4)
+        parity_declustering_online_recover(tip);
+    else {
+        fprintf(stderr, "error method %d\n", tip->ainfo->method);
+        exit(1);
+    }
 
     pthread_mutex_lock(&tip->mutex);
     tip->iter_send_done = 1;
@@ -1143,6 +1152,16 @@ static void *replay_sub(void *arg) {
     return NULL;
 }
 
+pthread_t foreground_thread;
+char foreground_cmd[256];
+int has_fore = 0;
+
+void *foreground_request_sub(void *arg) {
+    char *cmd = arg;
+    system(cmd);
+
+    return NULL;
+}
 
 
 /**
@@ -1170,6 +1189,9 @@ static void handle_args(struct thr_info *tip, int argc, char *argv[]) {
 
     ainfo->failedDisk = 9;
 
+    ainfo->n = 6;
+    ainfo->m = 3;
+
     ainfo->strip_size = atoi(argv[5]);  //KB
 
     ainfo->strip_size *= 1024;
@@ -1189,6 +1211,21 @@ static void handle_args(struct thr_info *tip, int argc, char *argv[]) {
     tip->scount = tip->rcount = 0;
 
     tip->ainfo = ainfo;
+
+    if (ainfo->requestsPerSecond != 0) {
+        has_fore = 1;
+        ainfo->requestsPerSecond = 0;
+
+        int running_time = 1000;
+        sprintf(foreground_cmd, "/home/ceph/oi-raid/request/request %d %d %d %d %d %d %d %s %s out.txt", 
+                ainfo->method, ainfo->v, ainfo->k, ainfo->g, ainfo->strip_size / 1024, ainfo->capacity / 1024 / 1024, running_time, device_fn, ainfo->trace_fn);
+        printf("online request command: %s\n", foreground_cmd);
+        if (pthread_create(&foreground_thread, NULL, foreground_request_sub, foreground_cmd)) {
+            fatal("pthread_create", ERR_SYSCALL,
+                  "thread create failed\n");
+            /*NOTREACHED*/
+        }
+    }
 }
 
 /*
@@ -1257,6 +1294,11 @@ int main(int argc, char *argv[]) {
     FILE *f = fopen("running-time.txt", "a+");
     fprintf(f, "%lld.%09lld\n", du64_to_sec(clock_diff), du64_to_nsec(clock_diff));
     fclose(f);
+
+    if (has_fore && pthread_join(foreground_thread, NULL)) {
+        fatal("pthread_join", ERR_SYSCALL, "pthread rec join failed\n");
+        /*NOTREACHED*/
+    }
 
     return 0;
 }

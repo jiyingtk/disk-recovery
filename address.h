@@ -17,6 +17,8 @@ struct addr_info {
     int **bibd, * *spd;
     int b, v, r, k, lambda;
     int g;
+    int n, m;
+    int g2; //S2-RAID
 
     char *trace_fn;
     int max_stripes;
@@ -33,36 +35,113 @@ void makeSubRAID(struct addr_info *ainfo);
 
 
 void init_parameters(struct addr_info *ainfo) {
-    ainfo->disk_nums = ainfo->v * ainfo->g;
     ainfo->blocks_per_strip = ainfo->strip_size / BLOCK;
-    ainfo->stripe_nums = ainfo->v * ainfo->g * ainfo->r * (ainfo->g - 1) / ainfo->k;
-
-    int align = ainfo->r * (ainfo->g - 1);
-    ainfo->max_stripes = (ainfo->max_stripes) / align;
-    ainfo->max_stripes *= align;
 
     ainfo->capacity /= ainfo->strip_size;
-
-    addr_type spareSize = (ainfo->capacity + ainfo->disk_nums - 1) / ainfo->disk_nums;
-    ainfo->strips_partition = (ainfo->capacity - spareSize) / (ainfo->g * ainfo->r);
-    ainfo->blocks_partition = ainfo->strips_partition * ainfo->blocks_per_strip;
-
-    ainfo->data_blocks = ainfo->capacity - spareSize;
-    ainfo->data_blocks *= ainfo->blocks_per_strip;
-
-    spareSize *= ainfo->strip_size;
     ainfo->capacity *= ainfo->strip_size;
-
-    fprintf(stderr, "spareSize %fGB, capacity %fGB\n", spareSize * 1.0f / 1024 / 1024 / 1024, ainfo->capacity * 1.0f / 1024 / 1024 / 1024);
-
+   
+    ainfo->stripe_nums = 1;
+    
     if (ainfo->method == 0) {   //RAID5
+        ainfo->capacity /= ainfo->strip_size;
+
+        ainfo->strips_partition = ainfo->capacity;
+        ainfo->blocks_partition = ainfo->strips_partition * ainfo->blocks_per_strip;
+
+        ainfo->capacity *= ainfo->strip_size;
+
         ainfo->disk_nums = ainfo->disk_nums / ainfo->k * ainfo->k;
+        ainfo->capacity_total = ainfo->capacity / BLOCK * ainfo->disk_nums / ainfo->k * (ainfo->k - 1);
+    } else if (ainfo->method == 1) {    //OI-RAID
+        ainfo->stripe_nums = ainfo->v * ainfo->g * ainfo->r * (ainfo->g - 1) / ainfo->k;
+        
+        int align = ainfo->r * (ainfo->g - 1);
+        ainfo->max_stripes = (ainfo->max_stripes) / align;
+        ainfo->max_stripes *= align;
+
+        ainfo->capacity /= ainfo->strip_size;
+
+        ainfo->capacity /= ainfo->g * ainfo->r;
+        ainfo->capacity *= ainfo->g * ainfo->r;
+
+        ainfo->strips_partition = (ainfo->capacity) / (ainfo->g * ainfo->r);
+        ainfo->blocks_partition = ainfo->strips_partition * ainfo->blocks_per_strip;
+
+        ainfo->data_blocks = ainfo->capacity;
+        ainfo->data_blocks *= ainfo->blocks_per_strip;
+
+        ainfo->capacity *= ainfo->strip_size;
+
+        ainfo->capacity_total = ainfo->stripe_nums * (ainfo->k - 1) * ainfo->blocks_partition;
+    } else if (ainfo->method == 2) {    //RS Code
+        ainfo->capacity /= ainfo->strip_size;
+
+        ainfo->strips_partition = ainfo->capacity;
+        ainfo->blocks_partition = ainfo->strips_partition * ainfo->blocks_per_strip;
+
+        ainfo->capacity *= ainfo->strip_size;
+
+        ainfo->disk_nums = ainfo->disk_nums / (ainfo->n + ainfo->m) * (ainfo->n + ainfo->m);
+        ainfo->capacity_total = ainfo->capacity / BLOCK * ainfo->disk_nums / (ainfo->n + ainfo->m) * (ainfo->n);
+    } else if (ainfo->method == 3) {    //S2-RAID
+        ainfo->disk_nums = ainfo->disk_nums / ainfo->k * ainfo->k;
+        ainfo->g2 = ainfo->disk_nums / ainfo->k;
+        ainfo->stripe_nums = ainfo->g2 * ainfo->g2;
+        
+        int align = ainfo->g2;
+        ainfo->max_stripes /= align;
+        ainfo->max_stripes *= align;
+
+        ainfo->capacity /= ainfo->strip_size;
+
+        ainfo->capacity /= align;
+        ainfo->capacity *= align;
+
+        ainfo->strips_partition = ainfo->capacity / ainfo->g2;
+        ainfo->blocks_partition = ainfo->strips_partition * ainfo->blocks_per_strip;
+
+        ainfo->data_blocks = ainfo->capacity;
+        ainfo->data_blocks *= ainfo->blocks_per_strip;
+
+        ainfo->capacity *= ainfo->strip_size;
+
+        ainfo->capacity_total = ainfo->capacity / BLOCK * ainfo->disk_nums / ainfo->k * (ainfo->k - 1);
+        
+    } else if (ainfo->method == 4) {    //Parity Declustering
+        ainfo->stripe_nums = ainfo->b;
+        
+        int align = ainfo->r;
+        ainfo->max_stripes /= align;
+        ainfo->max_stripes *= align;
+
+        ainfo->capacity /= ainfo->strip_size;
+
+        ainfo->capacity /= align;
+        ainfo->capacity *= align;
+
+        ainfo->strips_partition = ainfo->capacity / ainfo->r;
+        ainfo->blocks_partition = ainfo->strips_partition * ainfo->blocks_per_strip;
+
+        ainfo->data_blocks = ainfo->capacity;
+        ainfo->data_blocks *= ainfo->blocks_per_strip;
+
+        ainfo->capacity *= ainfo->strip_size;
+
         ainfo->capacity_total = ainfo->capacity / BLOCK * ainfo->disk_nums / ainfo->k * (ainfo->k - 1);
 
     } else {
-        ainfo->capacity_total = ainfo->stripe_nums * (ainfo->k - 1) * ainfo->blocks_partition;
+        exit(1);
     }
 
+    fprintf(stderr, "capacity %fGB\n", ainfo->capacity * 1.0f / 1024 / 1024 / 1024);
+    if (ainfo->method == 1)
+        fprintf(stderr, "recover size %fGB\n", ainfo->r * (ainfo->g - 1) * ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024);
+    else if (ainfo->method == 3)
+        fprintf(stderr, "recover size %fGB\n", ainfo->g2 * ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024);
+    else if (ainfo->method == 4)
+        fprintf(stderr, "recover size %fGB\n", ainfo->r * ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024);
+    else
+        fprintf(stderr, "recover size %fGB\n", ainfo->capacity * 1.0f / 1024 / 1024 / 1024);
 }
 
 void init_addr_info(struct addr_info *ainfo) {
@@ -72,24 +151,44 @@ void init_addr_info(struct addr_info *ainfo) {
 
     fscanf(bibd_f, "%d %d %d %d %d", &ainfo->b, &ainfo->v, &ainfo->k, &ainfo->r, &ainfo->lambda);
 
+    ainfo->disk_nums = ainfo->v * ainfo->g;
+
+    if (ainfo->method == 4) {
+        fclose(bibd_f);
+
+        sprintf(fn, "%d.%d.bd", ainfo->disk_nums, ainfo->k);
+        bibd_f = fopen(fn, "r");
+        fscanf(bibd_f, "%d %d %d %d %d", &ainfo->b, &ainfo->v, &ainfo->k, &ainfo->r, &ainfo->lambda);
+
+        //fprintf(stderr, "%d %d %d %d %d\n", ainfo->b, ainfo->v, ainfo->k, ainfo->r, ainfo->lambda);
+        //exit(1);
+    }
+
     init_parameters(ainfo);
 
     int i, j;
-    int stripe_nums = ainfo->stripe_nums;
+    int stripe_nums = ainfo->stripe_nums, region_nums = 1;
+    
+    if (ainfo->method == 1)
+        region_nums = ainfo->g * ainfo->r;
+    else if (ainfo->method == 3)
+        region_nums = ainfo->g2;
+    else if (ainfo->method == 4)
+        region_nums = ainfo->r;
 
-    diskArray = (typeof(diskArray)) malloc(sizeof(typeof(*diskArray)) * stripe_nums);
-    offsetArray = (typeof(offsetArray)) malloc(sizeof(typeof(*offsetArray)) * stripe_nums);
+        diskArray = (typeof(diskArray)) malloc(sizeof(typeof(*diskArray)) * stripe_nums);
+        offsetArray = (typeof(offsetArray)) malloc(sizeof(typeof(*offsetArray)) * stripe_nums);
 
-    for (i = 0; i < stripe_nums; i++) {
-        diskArray[i] = (typeof(*diskArray)) malloc(sizeof(typeof(**diskArray)) * ainfo->k);
-        offsetArray[i] = (typeof(*offsetArray)) malloc(sizeof(typeof(**offsetArray)) * ainfo->k);
-    }
+        for (i = 0; i < stripe_nums; i++) {
+            diskArray[i] = (typeof(*diskArray)) malloc(sizeof(typeof(**diskArray)) * ainfo->k);
+            offsetArray[i] = (typeof(*offsetArray)) malloc(sizeof(typeof(**offsetArray)) * ainfo->k);
+        }
 
-    diskRegion = (typeof(diskRegion)) malloc(sizeof(typeof(*diskRegion)) * ainfo->v * ainfo->g);
+        diskRegion = (typeof(diskRegion)) malloc(sizeof(typeof(*diskRegion)) * ainfo->disk_nums);
 
-    for (i = 0; i < ainfo->v * ainfo->g; i++) {
-        diskRegion[i] = (typeof(*diskRegion)) malloc(sizeof(typeof(**diskRegion)) * ainfo->g * ainfo->r);
-    }
+        for (i = 0; i < ainfo->disk_nums; i++) {
+            diskRegion[i] = (typeof(*diskRegion)) malloc(sizeof(typeof(**diskRegion)) * region_nums);
+        }
 
     int **bibd, **spd;
     bibd = (typeof(bibd)) malloc(sizeof(typeof(*bibd)) * ainfo->b);
@@ -102,28 +201,52 @@ void init_addr_info(struct addr_info *ainfo) {
         }
     }
 
-    spd = (typeof(spd)) malloc(sizeof(typeof(*spd)) * ainfo->g * (ainfo->g - 1));
+    int g = ainfo->method == 3 ? ainfo->g2 : ainfo->g;
 
-    for (i = 0; i < ainfo->g * (ainfo->g - 1); i++) {
+    spd = (typeof(spd)) malloc(sizeof(typeof(*spd)) * g * g);
+
+    for (i = 0; i < g * g; i++) {
         spd[i] = (typeof(*spd)) malloc(sizeof(typeof(**spd)) * ainfo->k);
 
         for (j = 0; j < ainfo->k; j++) {
             int a, b;
-            a = i / ainfo->g;
-            b = i % ainfo->g;
-            spd[i][j] = (b + a * j) % ainfo->g;
+            a = i / g;
+            b = i % g;
+            spd[i][j] = (b + a * j) % g;
         }
     }
 
     ainfo->bibd = bibd;
     ainfo->spd = spd;
 
-    makeSubRAID(ainfo);
+    if (ainfo->method == 1)
+        makeSubRAID(ainfo);
+    else if (ainfo->method == 3) {
+        for(i = 0; i < stripe_nums; i++) {
+            for(j = 0; j < ainfo->k; j++) {
+                diskArray[i][j] = spd[i][j] + j * ainfo->g2;
+                offsetArray[i][j] = i / ainfo->g2;
+                diskRegion[diskArray[i][j]][offsetArray[i][j]] = i;
+            }
+        }
+    }
+    else if (ainfo->method == 4) {
+        int disk[MAX_DEVICE_NUM] = {0};
+        for(i = 0; i < stripe_nums; i++) {
+            for(j = 0; j < ainfo->k; j++) {
+                diskArray[i][j] = bibd[i][j];
+                offsetArray[i][j] = disk[diskArray[i][j]];
+                disk[diskArray[i][j]]++;
+
+                diskRegion[diskArray[i][j]][offsetArray[i][j]] = i;
+            }
+        }
+    }
 }
 
 void destroy_addr_info(struct addr_info *ainfo) {
     int i;
-    int stripe_nums = ainfo->v * ainfo->g * ainfo->r * (ainfo->g - 1) / ainfo->k;
+    int stripe_nums = ainfo->stripe_nums;
 
     for (i = 0; i < stripe_nums; i++) {
         free(diskArray[i]);
@@ -133,7 +256,7 @@ void destroy_addr_info(struct addr_info *ainfo) {
     free(diskArray);
     free(offsetArray);
 
-    for (i = 0; i < ainfo->v * ainfo->g; i++) {
+    for (i = 0; i < ainfo->disk_nums; i++) {
         free(diskRegion[i]);
     }
 
@@ -148,8 +271,9 @@ void destroy_addr_info(struct addr_info *ainfo) {
     free(bibd);
 
     int **spd = ainfo->spd;
+    int g = ainfo->method == 3 ? ainfo->g2 : ainfo->g;
 
-    for (i = 0; i < ainfo->g * (ainfo->g - 1); i++) {
+    for (i = 0; i < g * g; i++) {
         free(spd[i]);
     }
 
@@ -541,7 +665,7 @@ void raid5_online_recover(struct thr_info *tip) {
     int i, j, k, m;
 
     int groupId, inGroupId; //坏盘所在组，以及在组内的磁盘编号
-    int *disks = (typeof(disks)) malloc(sizeof(typeof(*disks)) * (ainfo->g - 1));   //对应的2个存活磁盘
+    int *disks = (typeof(disks)) malloc(sizeof(typeof(*disks)) * (ainfo->k - 1));   //对应的2个存活磁盘
 
     FILE *f = fopen(ainfo->trace_fn, "r");
 
@@ -563,17 +687,17 @@ void raid5_online_recover(struct thr_info *tip) {
     }
 
     int max = 100;
-    int step = (int) (ainfo->r * (ainfo->g - 1) * ainfo->strips_partition / 100.0);
+    int step = (int) (ainfo->strips_partition / 100.0);
 
     if (step == 0) {
-        max = ainfo->r * (ainfo->g - 1) * ainfo->strips_partition;
+        max = ainfo->strips_partition;
         step = 1;
     }
 
     tip->bs->left_stripes = ainfo->max_stripes;
-    fprintf(stderr, "start recover [raid5], total size %fGB\n", ainfo->r * (ainfo->g - 1) * ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024);
+    fprintf(stderr, "start recover [raid5], total size %fGB\n", ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024);
 
-    for(i = 0; i < ainfo->r * (ainfo->g - 1); i++) {
+    for(i = 0; i < 1; i++) {
         for(j = 0; j < ainfo->strips_partition; j++) {
             if ((i * ainfo->strips_partition + j) % step == 0) {
                 int cur = (i * ainfo->strips_partition + j) / step;
@@ -608,6 +732,146 @@ void raid5_online_recover(struct thr_info *tip) {
             }
 
             tip->bs->left_nums[processed_stripes % ainfo->max_stripes] = ainfo->k - 1;
+            tip->bs->disk_dst[processed_stripes % ainfo->max_stripes] = ainfo->failedDisk;
+            tip->bs->offset_dst[processed_stripes % ainfo->max_stripes] = (i * ainfo->blocks_partition + j * ainfo->blocks_per_strip) * BLOCK;
+            iocbs_map(tip, list, reqs, ntodo, 0);
+
+            ndone = io_submit(tip->ctx, ntodo, list);
+
+            if (ndone != ntodo) {
+                fatal("io_submit", ERR_SYSCALL,
+                      "%d: io_submit(%d:%ld) failed (%s)\n",
+                      tip->cpu, ntodo, ndone,
+                      strerror(labs(ndone)));
+            }
+
+            pthread_mutex_lock(&tip->mutex);
+            tip->naios_out += ndone;
+            assert(tip->naios_out <= naios);
+
+            if (tip->reap_wait) {
+                tip->reap_wait = 0;
+                pthread_cond_signal(&tip->cond);
+            }
+
+            pthread_mutex_unlock(&tip->mutex);
+
+
+            // if ((reqest_count + 1) % 20 == 0)
+            //  fprintf(stderr, "has process %d request\n", reqest_count);
+
+            int reqest_count = 0;
+
+            while (reqest_count < ainfo->requestsPerSecond) {
+                int retCode;
+                retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
+
+                if (retCode != 5) {
+                    fclose(f);
+                    f = fopen(ainfo->trace_fn, "r");
+                    retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
+                }
+
+                logicAddr = (logicAddr / 8) % ainfo->capacity_total;
+                raid5_3time7disks_request(tip, logicAddr, size, op);
+                reqest_count++;
+
+                long long cur_time = gettime();
+                long long time_diff = (long long) (timeStamp * 1000 * 1000 * 1000) - (cur_time - start_time);
+
+                if (time_diff < 0) {
+                    break;
+                }
+            }
+
+            processed_stripes++;
+        }
+    }
+
+    free(disks);
+}
+
+void rs_online_recover(struct thr_info *tip) {
+    struct iocb *list[MAX_DEVICE_NUM];
+    long long last_time = gettime();
+    long long start_time = gettime();
+
+    struct request_info reqs[MAX_DEVICE_NUM];
+
+    long long processed_stripes = 0;
+
+
+    struct addr_info *ainfo = tip->ainfo;
+    int i, j, k, m;
+
+    int groupId, inGroupId; //坏盘所在组，以及在组内的磁盘编号
+    int *disks = (typeof(disks)) malloc(sizeof(typeof(*disks)) * (ainfo->n));   //对应的2个存活磁盘
+
+    FILE *f = fopen(ainfo->trace_fn, "r");
+
+    int hostName, logicAddr, size;
+    char op;
+    double timeStamp;
+
+    groupId = ainfo->failedDisk / (ainfo->n + ainfo->m);
+    inGroupId = ainfo->failedDisk % (ainfo->n + ainfo->m);
+
+    j = 0;
+
+    for(i = 0; i < ainfo->n + ainfo->m && j < ainfo->n; i++) {
+        if(inGroupId == i)
+            continue;
+
+        disks[j] = groupId * (ainfo->n + ainfo->m) + i;
+        j++;
+    }
+
+    int max = 100;
+    int step = (int) (ainfo->strips_partition / 100.0);
+
+    if (step == 0) {
+        max = ainfo->strips_partition;
+        step = 1;
+    }
+
+    tip->bs->left_stripes = ainfo->max_stripes;
+    fprintf(stderr, "start recover [rs(6,9)], total size %fGB\n", ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024);
+
+    for(i = 0; i < 1; i++) {
+        for(j = 0; j < ainfo->strips_partition; j++) {
+            if ((i * ainfo->strips_partition + j) % step == 0) {
+                int cur = (i * ainfo->strips_partition + j) / step;
+                fprintf(stderr, "progress %d/%d\n", cur, max);
+            }
+
+            if (processed_stripes != 0 && processed_stripes % ainfo->max_stripes == 0) {   //du64_to_sec(gettime() - last_time) >= 10
+                printf("wait reclaim\n");
+                pthread_mutex_lock(&tip->mutex);
+                tip->send_wait = 1;
+                tip->wait_all_finish = 1;
+
+                if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
+                    fatal("pthread_cond_wait", ERR_SYSCALL,
+                          "time cond wait failed\n");
+                    /*NOTREACHED*/
+                }
+
+                last_time = gettime();
+                tip->bs->left_stripes = ainfo->max_stripes;
+                pthread_mutex_unlock(&tip->mutex);
+            }
+
+            int ntodo = ainfo->n, ndone;
+
+            for(k = 0; k < ainfo->n; k++) {
+                reqs[k].type = 1;
+                reqs[k].disk_num = disks[k];
+                reqs[k].offset = (i * ainfo->blocks_partition + j * ainfo->blocks_per_strip) * BLOCK;
+                reqs[k].size = ainfo->strip_size;
+                reqs[k].stripe_id = processed_stripes % ainfo->max_stripes;
+            }
+
+            tip->bs->left_nums[processed_stripes % ainfo->max_stripes] = ainfo->n;
             tip->bs->disk_dst[processed_stripes % ainfo->max_stripes] = ainfo->failedDisk;
             tip->bs->offset_dst[processed_stripes % ainfo->max_stripes] = (i * ainfo->blocks_partition + j * ainfo->blocks_per_strip) * BLOCK;
             iocbs_map(tip, list, reqs, ntodo, 0);
@@ -715,6 +979,24 @@ void oi_raid_online_recover(struct thr_info *tip) {
         }
     }
 
+    int spareDisks[MAX_DEVICE_NUM] = {0};
+    int spareMap[MAX_DEVICE_NUM], spareDiskNum = ainfo->disk_nums;
+    for (j = 0; j < ainfo->r * (ainfo->g - 1); j++) {
+        for (k = 0; k < ainfo->k - 1; k++) {
+            spareDisks[disks[j][k]] = 1;
+            spareDiskNum--;
+        }
+    }
+    i = 0;
+    for (j = 0; j < ainfo->disk_nums; j++) {
+        if (spareDisks[j] == 0)
+            spareMap[i++] = j;
+    }
+    if (i != spareDiskNum) {
+        fprintf(stderr, "error disk_nums %d, %d\n", i, spareDiskNum);
+        exit(1);
+    }
+
     FILE *f = fopen(ainfo->trace_fn, "r");
 
     int max = 100;
@@ -763,8 +1045,8 @@ void oi_raid_online_recover(struct thr_info *tip) {
             }
 
             tip->bs->left_nums[processed_stripes % ainfo->max_stripes] = ainfo->k - 1;
-            tip->bs->disk_dst[processed_stripes % ainfo->max_stripes] = spareOffset % ainfo->disk_nums;
-            tip->bs->offset_dst[processed_stripes % ainfo->max_stripes] = (ainfo->data_blocks + spareOffset / ainfo->disk_nums * ainfo->blocks_per_strip) * BLOCK;
+            tip->bs->disk_dst[processed_stripes % ainfo->max_stripes] = spareMap[spareOffset % spareDiskNum];
+            tip->bs->offset_dst[processed_stripes % ainfo->max_stripes] = (ainfo->data_blocks + spareOffset / spareDiskNum * ainfo->blocks_per_strip) * BLOCK;
 
             spareOffset++;
             processed_stripes++;
@@ -824,6 +1106,367 @@ void oi_raid_online_recover(struct thr_info *tip) {
     free(subRAID);
 
     for (i = 0; i < ainfo->r * (ainfo->g - 1); i++) {
+        free(disks[i]);
+        free(offsets[i]);
+    }
+
+    free(disks);
+    free(offsets);
+}
+
+void s2_raid_online_recover(struct thr_info *tip) {
+    struct iocb *list[MAX_DEVICE_NUM];
+    long long last_time = gettime();
+    long long start_time = gettime();
+
+    struct request_info reqs[MAX_DEVICE_NUM];
+
+    long long processed_stripes = 0;
+
+    struct addr_info *ainfo = tip->ainfo;
+    int i, j, k, n, m;
+    int *subRAID = (typeof(subRAID)) malloc(sizeof(typeof(*subRAID)) * ainfo->g2);  //需要修复的6个PARTITION
+
+    int **disks, **offsets; //6个PARTITION分别对应的存活磁盘和偏移
+
+    disks = (typeof(disks)) malloc(sizeof(typeof(*disks)) * ainfo->g2);
+    offsets = (typeof(offsets)) malloc(sizeof(typeof(*offsets)) * ainfo->g2);
+
+    for (i = 0; i < ainfo->g2; i++) {
+        disks[i] = (typeof(*disks)) malloc(sizeof(typeof(**disks)) * (ainfo->k - 1));
+        offsets[i] = (typeof(*offsets)) malloc(sizeof(typeof(**offsets)) * (ainfo->k - 1));
+    }
+
+
+    int hostName, logicAddr, size;
+    char op;
+    double timeStamp;
+
+    int spareOffset = 0;
+    for(i = 0; i < ainfo->g2; i++) {
+        subRAID[i] = diskRegion[ainfo->failedDisk][i];
+
+        j = 0;
+
+        for(k = 0; k < ainfo->k; k++) {
+            if(diskArray[subRAID[i]][k] == ainfo->failedDisk)
+                continue;
+
+            disks[i][j] = diskArray[subRAID[i]][k];
+            offsets[i][j] = offsetArray[subRAID[i]][k];
+            j++;
+
+        }
+    }
+
+    int spareDisks[MAX_DEVICE_NUM] = {0};
+    int spareMap[MAX_DEVICE_NUM], spareDiskNum = ainfo->disk_nums;
+    for (j = 0; j < ainfo->g2; j++) {
+        for (k = 0; k < ainfo->k - 1; k++) {
+            spareDisks[disks[j][k]] = 1;
+            spareDiskNum--;
+        }
+    }
+    i = 0;
+    for (j = 0; j < ainfo->disk_nums; j++) {
+        if (spareDisks[j] == 0)
+            spareMap[i++] = j;
+    }
+    if (i != spareDiskNum) {
+        fprintf(stderr, "error disk_nums %d, %d\n", i, spareDiskNum);
+        exit(1);
+    }
+
+    FILE *f = fopen(ainfo->trace_fn, "r");
+
+    int max = 100;
+    int step = (int) (ainfo->strips_partition / 100.0);
+
+    if (step == 0) {
+        max = ainfo->strips_partition;
+        step = 1;
+    }
+
+    tip->bs->left_stripes = ainfo->max_stripes;
+    fprintf(stderr, "start recover [s2-raid], total size %fGB, strips_partition %lld\n", ainfo->g2 * ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024, ainfo->strips_partition);
+
+    for(i = 0; i < ainfo->strips_partition; i++) {
+        if ((i) % step == 0)
+            fprintf(stderr, "progress %d/%d\n", (i) / step, max);
+
+        int req_count = 0;
+
+        for(j = 0; j < ainfo->g2; j++) {
+            if (processed_stripes != 0 && processed_stripes % ainfo->max_stripes == 0) {   //du64_to_sec(gettime() - last_time) >= 10
+                // printf("time wait\n");
+                pthread_mutex_lock(&tip->mutex);
+                tip->send_wait = 1;
+                tip->wait_all_finish = 1;
+
+                if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
+                    fatal("pthread_cond_wait", ERR_SYSCALL,
+                          "time cond wait failed\n");
+                    /*NOTREACHED*/
+                }
+
+                last_time = gettime();
+                tip->bs->left_stripes = ainfo->max_stripes;
+                pthread_mutex_unlock(&tip->mutex);
+            }
+
+            for(k = 0; k < ainfo->k - 1; k++) {
+
+                reqs[req_count].type = 1;
+                reqs[req_count].disk_num = disks[j][k];
+                reqs[req_count].offset = (offsets[j][k] * ainfo->blocks_partition + i * ainfo->blocks_per_strip) * BLOCK;
+                reqs[req_count].size = ainfo->strip_size;
+                reqs[req_count].stripe_id = processed_stripes % ainfo->max_stripes;
+                req_count++;
+            }
+
+            tip->bs->left_nums[processed_stripes % ainfo->max_stripes] = ainfo->k - 1;
+            tip->bs->disk_dst[processed_stripes % ainfo->max_stripes] = spareMap[spareOffset % spareDiskNum];
+            tip->bs->offset_dst[processed_stripes % ainfo->max_stripes] = (ainfo->data_blocks + spareOffset / spareDiskNum * ainfo->blocks_per_strip) * BLOCK;
+
+            spareOffset++;
+            processed_stripes++;
+        }
+
+        iocbs_map(tip, list, reqs, req_count, 0);
+
+        int ndone = io_submit(tip->ctx, req_count, list);
+
+        if (ndone != req_count) {
+            fatal("io_submit", ERR_SYSCALL,
+                  "%d: io_submit(%d:%ld) failed (%s)\n",
+                  tip->cpu, req_count, ndone,
+                  strerror(labs(ndone)));
+            /*NOTREACHED*/
+        }
+
+        pthread_mutex_lock(&tip->mutex);
+        tip->naios_out += ndone;
+        assert(tip->naios_out <= naios);
+
+        if (tip->reap_wait) {
+            tip->reap_wait = 0;
+            pthread_cond_signal(&tip->cond);
+        }
+
+        pthread_mutex_unlock(&tip->mutex);
+
+        int reqest_count = 0;
+
+        while (reqest_count < ainfo->requestsPerSecond) {
+            int retCode;
+            retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
+
+            if (retCode != 5) {
+                fclose(f);
+                f = fopen(ainfo->trace_fn, "r");
+                retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
+            }
+
+            logicAddr = (logicAddr / 8) % ainfo->capacity_total;
+            oi_raid_request(tip, logicAddr, size, op);
+            reqest_count++;
+
+            long long cur_time = gettime();
+            long long time_diff = (long long) (timeStamp * 1000 * 1000 * 1000) - (cur_time - start_time);
+
+            if (time_diff < 0) {
+                break;
+            }
+        }
+
+
+    }
+
+
+    free(subRAID);
+
+    for (i = 0; i < ainfo->g2; i++) {
+        free(disks[i]);
+        free(offsets[i]);
+    }
+
+    free(disks);
+    free(offsets);
+}
+
+void parity_declustering_online_recover(struct thr_info *tip) {
+    struct iocb *list[MAX_DEVICE_NUM];
+    long long last_time = gettime();
+    long long start_time = gettime();
+
+    struct request_info reqs[MAX_DEVICE_NUM];
+
+    long long processed_stripes = 0;
+
+    struct addr_info *ainfo = tip->ainfo;
+    int i, j, k, n, m;
+    int *subRAID = (typeof(subRAID)) malloc(sizeof(typeof(*subRAID)) * ainfo->r);  //需要修复的6个PARTITION
+
+    int **disks, **offsets; //6个PARTITION分别对应的存活磁盘和偏移
+
+    disks = (typeof(disks)) malloc(sizeof(typeof(*disks)) * ainfo->r);
+    offsets = (typeof(offsets)) malloc(sizeof(typeof(*offsets)) * ainfo->r);
+
+    for (i = 0; i < ainfo->r; i++) {
+        disks[i] = (typeof(*disks)) malloc(sizeof(typeof(**disks)) * (ainfo->k - 1));
+        offsets[i] = (typeof(*offsets)) malloc(sizeof(typeof(**offsets)) * (ainfo->k - 1));
+    }
+
+
+    int hostName, logicAddr, size;
+    char op;
+    double timeStamp;
+
+    int spareOffset = 0;
+    for(i = 0; i < ainfo->r; i++) {
+        subRAID[i] = diskRegion[ainfo->failedDisk][i];
+
+        j = 0;
+
+        for(k = 0; k < ainfo->k; k++) {
+            if(diskArray[subRAID[i]][k] == ainfo->failedDisk)
+                continue;
+
+            disks[i][j] = diskArray[subRAID[i]][k];
+            offsets[i][j] = offsetArray[subRAID[i]][k];
+            j++;
+
+        }
+    }
+
+    int spareDisks[MAX_DEVICE_NUM] = {0};
+    int spareMap[MAX_DEVICE_NUM], spareDiskNum = ainfo->disk_nums;
+    for (j = 0; j < ainfo->r; j++) {
+        for (k = 0; k < ainfo->k - 1; k++) {
+            spareDisks[disks[j][k]] = 1;
+            spareDiskNum--;
+        }
+    }
+    i = 0;
+    spareDiskNum = ainfo->disk_nums;
+    for (j = 0; j < ainfo->disk_nums; j++) {
+//        if (spareDisks[j] == 0)
+            spareMap[i++] = j;
+    }
+ //   if (i != spareDiskNum) {
+ //       fprintf(stderr, "error disk_nums %d, %d\n", i, spareDiskNum);
+ //       exit(1);
+ //   }
+
+    FILE *f = fopen(ainfo->trace_fn, "r");
+
+    int max = 100;
+    int step = (int) (ainfo->strips_partition / 100.0);
+
+    if (step == 0) {
+        max = ainfo->strips_partition;
+        step = 1;
+    }
+
+    tip->bs->left_stripes = ainfo->max_stripes;
+    fprintf(stderr, "start recover [parity-declustering], total size %fGB, strips_partition %lld\n", ainfo->r * ainfo->strips_partition * ainfo->strip_size * 1.0f / 1024 / 1024 / 1024, ainfo->strips_partition);
+
+    for(i = 0; i < ainfo->strips_partition; i++) {
+        if ((i) % step == 0)
+            fprintf(stderr, "progress %d/%d\n", (i) / step, max);
+
+        int req_count = 0;
+
+        for(j = 0; j < ainfo->r; j++) {
+            if (processed_stripes != 0 && processed_stripes % ainfo->max_stripes == 0) {   //du64_to_sec(gettime() - last_time) >= 10
+                // printf("time wait\n");
+                pthread_mutex_lock(&tip->mutex);
+                tip->send_wait = 1;
+                tip->wait_all_finish = 1;
+
+                if (pthread_cond_wait(&tip->cond, &tip->mutex)) {
+                    fatal("pthread_cond_wait", ERR_SYSCALL,
+                          "time cond wait failed\n");
+                    /*NOTREACHED*/
+                }
+
+                last_time = gettime();
+                tip->bs->left_stripes = ainfo->max_stripes;
+                pthread_mutex_unlock(&tip->mutex);
+            }
+
+            for(k = 0; k < ainfo->k - 1; k++) {
+
+                reqs[req_count].type = 1;
+                reqs[req_count].disk_num = disks[j][k];
+                reqs[req_count].offset = (offsets[j][k] * ainfo->blocks_partition + i * ainfo->blocks_per_strip) * BLOCK;
+                reqs[req_count].size = ainfo->strip_size;
+                reqs[req_count].stripe_id = processed_stripes % ainfo->max_stripes;
+                req_count++;
+            }
+
+            tip->bs->left_nums[processed_stripes % ainfo->max_stripes] = ainfo->k - 1;
+            tip->bs->disk_dst[processed_stripes % ainfo->max_stripes] = spareMap[spareOffset % spareDiskNum];
+            tip->bs->offset_dst[processed_stripes % ainfo->max_stripes] = (ainfo->data_blocks + spareOffset / spareDiskNum * ainfo->blocks_per_strip) * BLOCK;
+
+            spareOffset++;
+            processed_stripes++;
+        }
+
+        iocbs_map(tip, list, reqs, req_count, 0);
+
+        int ndone = io_submit(tip->ctx, req_count, list);
+
+        if (ndone != req_count) {
+            fatal("io_submit", ERR_SYSCALL,
+                  "%d: io_submit(%d:%ld) failed (%s)\n",
+                  tip->cpu, req_count, ndone,
+                  strerror(labs(ndone)));
+            /*NOTREACHED*/
+        }
+
+        pthread_mutex_lock(&tip->mutex);
+        tip->naios_out += ndone;
+        assert(tip->naios_out <= naios);
+
+        if (tip->reap_wait) {
+            tip->reap_wait = 0;
+            pthread_cond_signal(&tip->cond);
+        }
+
+        pthread_mutex_unlock(&tip->mutex);
+
+        int reqest_count = 0;
+
+        while (reqest_count < ainfo->requestsPerSecond) {
+            int retCode;
+            retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
+
+            if (retCode != 5) {
+                fclose(f);
+                f = fopen(ainfo->trace_fn, "r");
+                retCode = fscanf(f, "%d,%d,%d,%c,%lf", &hostName, &logicAddr, &size, &op, &timeStamp);
+            }
+
+            logicAddr = (logicAddr / 8) % ainfo->capacity_total;
+            oi_raid_request(tip, logicAddr, size, op);
+            reqest_count++;
+
+            long long cur_time = gettime();
+            long long time_diff = (long long) (timeStamp * 1000 * 1000 * 1000) - (cur_time - start_time);
+
+            if (time_diff < 0) {
+                break;
+            }
+        }
+
+
+    }
+
+
+    free(subRAID);
+
+    for (i = 0; i < ainfo->r; i++) {
         free(disks[i]);
         free(offsets[i]);
     }
