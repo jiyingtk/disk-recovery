@@ -1,2 +1,2 @@
 # recovery
-single disk recovery
+single disk failure recovery
